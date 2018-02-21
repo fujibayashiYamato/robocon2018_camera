@@ -20,17 +20,3 @@
 
 11110100 10011001 00001101 11000001
 11010000 01110101 00100001 11000000
-
-*** Please tell me who you are.
-
-Run
-
-  git config --global user.email "b1601422@planet.kanazawa-it.ac.jp"
-  git config --global user.name "dekopon"
-
-to set your account's default identity.
-Omit --global to set the identity only in this repository.
-
-fatal: unable to auto-detect email address (got 'ubuntu@dekopon.(none)')
-
-hoge
