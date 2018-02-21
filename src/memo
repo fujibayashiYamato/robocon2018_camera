@@ -20,3 +20,9 @@
 
 11110100 10011001 00001101 11000001
 11010000 01110101 00100001 11000000
+
+main.cpp:(.text.startup+0x2a):
+`tf::TransformBroadcaster::TransformBroadcaster()' に対する定義されていない参照です
+
+main.cpp:(.text.startup+0x189):
+`tf::TransformBroadcaster::sendTransform(geometry_msgs::TransformStamped_<std::allocator<void> > const&)' に対する定義されていない参照です

@@ -27,6 +27,8 @@
 #include <chrono>
 #include <sys/time.h>
 #include <limits.h>
+//#include <sys/stat.h>
+//#include <sys/types.h>
 
 #include "pcl.hpp"
 #include "pin.hpp"
@@ -107,7 +109,7 @@ public:
     CLOUD,
     BOTH,
     PCL,
-    TEST
+    REC
   };
 
 private:
@@ -224,6 +226,9 @@ private:
     case PCL:
       pclViewer();
       break;
+    case REC:
+      recViewer();
+      break;
     }
   }
 
@@ -279,6 +284,7 @@ private:
   }
 
 int orbitFlg = 0;
+bool key_i_flg = false;
 void pclViewer(){
 	Orbit orbit;
 	SerialDevice serial;
@@ -361,18 +367,18 @@ void pclViewer(){
 
         strIn[0] = serial.readChar();
         int numRead = 0;
-        oldTime = printTime.tv_sec;
+
         while(true){
-          printf("ok");
+          printf("ok\r");
           if(serial.charAvailable()){
             numRead++;
             strIn[numRead] = serial.readChar();
             if(numRead >= 11)break;
           }
-          if(printTime.tv_sec - oldTime >= 1){
+          /*if(printTime.tv_sec - oldTime >= 1){
             printf("erorr\n");
             break;
-          }
+          }*/
         }
 
         for (int i = 0; i < 3; i++) {
@@ -405,6 +411,8 @@ void pclViewer(){
       if(start_flg && setTime_flg){
         setTime_flg = false;
         oldRecordTime = recordTime.tv_sec;
+        orbit.setInitCameraPosXYZ(4.550,3.275,robotPos[2]);
+        orbit.setInitCameraAngleXYZ(0.0,0.0,0.0);
       }
 
       orbit.filter(cloud,campus);
@@ -437,13 +445,6 @@ void pclViewer(){
             printf("Y:%f Z:%f\n",ringShift[0],ringShift[1]);
             ftouc4((unsigned char *)pointOut[0],ringShift[0]);
             ftouc4((unsigned char *)pointOut[1],ringShift[1]);
-            /*printf("pointOut[0]:");
-            for (int i = 0; i < 4; i++) {print_binary_char(pointOut[0][i]);}
-            putchar('\n');
-            printf("pointOut[1]:");
-            for (int i = 0; i < 4; i++) {print_binary_char(pointOut[1][i]);}
-            putchar('\n');
-            putchar('\n');*/
           }
           stringBond(strOut,pointOut[0],pointOut[1]);
           for (int i = 0; i < 2; i++) {
@@ -463,17 +464,25 @@ void pclViewer(){
           start_flg = false;
           setTime_flg = true;
         }else{
-          orbit.setCameraPosXYZ(robotPos[0],robotPos[1],robotPos[2]);//N_RING_X + 6.0,N_RING_Y,0.011);//4.565,2.460,0.14);
-  				orbit.setCameraAngleXYZ(robotAngle[0],robotAngle[1],robotAngle[2]);//-1.0*M_PI/6.0
+          //orbit.setCameraPosXYZ(robotPos[0],robotPos[1],robotPos[2]);//N_RING_X + 6.0,N_RING_Y,0.011);//4.565,2.460,0.14);
+  				//orbit.setCameraAngleXYZ(robotAngle[0],robotAngle[1],robotAngle[2]);//-1.0*M_PI/6.0
           //orbit.clusteringContainer(filterCloud,campus);
   				for(int i = 0;i < 10 ;i++){
-  					orbit.addPoint(-1.0*(i+1),0.0,pointY[i]);//-1.0*z,x,y
+            robotPos[0] = 4.550;
+            robotPos[1] = 3.275-(0.1*i);
+            float xyz_centroid_buf[3];
+            xyz_centroid_buf[0] = -1.0*(i+1);
+            xyz_centroid_buf[1] = 0.0+(0.1*i);
+            xyz_centroid_buf[2] = pointY[i];
+            orbit.moveCloud(xyz_centroid_buf,robotPos[0]-4.550,robotPos[1]-3.275,robotPos[2]-robotPos[2]);
+  					orbit.addPoint(xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2]);//-1.0*z,x,y
+            //printf("%f\n",3.275-(0.1*i) - 0.0+(0.1*i));
           }
           oldRecordTime -= 2;
         }
       }
       orbit.mergeCloud(campus,orbitCloud,campus);
-      visualizer->updatePointCloud(campus, cloudName);
+      visualizer->updatePointCloud(cloud, cloudName);
       //gettimeofday(&printTime, NULL);
       //printf("%d\n",printTime.tv_usec - oldTime);
       /*if(printTime.tv_sec - oldTime >= 1){
@@ -497,6 +506,55 @@ void pclViewer(){
 	visualizer->close();
 }
 
+void recViewer(){
+  cv::Mat color, depth;
+    pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Cloud Viewer"));
+    const std::string cloudName = "rendered";
+
+    lock.lock();
+    color = this->color;
+    depth = this->depth;
+    updateCloud = false;
+    lock.unlock();
+
+    createCloud(depth, color, cloud);
+
+    visualizer->addPointCloud(cloud, cloudName);
+    visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
+    visualizer->initCameraParameters();
+    visualizer->setBackgroundColor(0, 0, 0);
+    visualizer->setPosition(mode == BOTH ? color.cols : 0, 0);
+    visualizer->setSize(color.cols, color.rows);
+    visualizer->setShowFPS(true);
+    visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
+    visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
+
+    for(; running && ros::ok();)
+    {
+      if(updateCloud)
+      {
+        lock.lock();
+        color = this->color;
+        depth = this->depth;
+        updateCloud = false;
+        lock.unlock();
+
+        createCloud(depth, color, cloud);
+
+        visualizer->updatePointCloud(cloud, cloudName);
+      }
+      if(save)
+      {
+        save = false;
+        cv::Mat depthDisp;
+        dispDepth(depth, depthDisp, 12000.0f);
+        saveCloudAndImages(cloud, color, depth, depthDisp);
+      }
+      visualizer->spinOnce(10);
+    }
+    visualizer->close();
+}
+
 void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *)
 {
 	if(event.keyUp())
@@ -507,9 +565,12 @@ void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *)
 		case 'q':
 			running = false;
 			break;
-		/*case 'i':
-			orbitFlg++;
-			break;*/
+		case 'i':
+			key_i_flg != key_i_flg;
+			break;
+    case 's':
+			save = true;
+			break;
 		}
 	}
 }
@@ -609,7 +670,7 @@ void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *)
   void saveCloudAndImages(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr cloud, const cv::Mat &color, const cv::Mat &depth, const cv::Mat &depthColored)
   {
     oss.str("");
-    oss << "./" << std::setfill('0') << std::setw(4) << frame;
+    oss << "./"  << std::setfill('0') << std::setw(4) << frame;
     const std::string baseName = oss.str();
     const std::string cloudName = baseName + "_cloud.pcd";
     const std::string colorName = baseName + "_color.jpg";
@@ -743,9 +804,9 @@ int main(int argc, char **argv)
     {
       mode = Receiver::PCL;
     }
-	else if(param == "test")
+	else if(param == "rec")
     {
-      mode = Receiver::TEST;
+      mode = Receiver::REC;
     }
     else
     {

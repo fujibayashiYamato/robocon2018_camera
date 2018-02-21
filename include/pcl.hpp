@@ -44,6 +44,8 @@
 #include <pcl/common/transforms.h>
 #include <pcl/console/parse.h>
 
+#include <tf/transform_broadcaster.h>
+
 #include "least_squares_method.hpp"
 
 #include <vector>
@@ -73,6 +75,8 @@ public:
 	void setup();
 	void setCameraPosXYZ(float X,float Y,float Z);
 	void setCameraAngleXYZ(float X,float Y,float Z);
+	void setInitCameraPosXYZ(float X,float Y,float Z);
+	void setInitCameraAngleXYZ(float X,float Y,float Z);
 	void addPoint(float X,float Y,float Z);
 	void cycle();
 	//float getPointX();
@@ -110,6 +114,8 @@ private:
 	float coeC;
 	float cameraPos[3];
 	float cameraAngle[3];
+	float initCameraPos[3];
+	float initCameraAngle[3];
 	float N_ringPos[3];
 	float G_ringPos[3];
 	//float avePointX;
@@ -132,6 +138,12 @@ Orbit::Orbit(){
 	cameraAngle[0] = 0;
 	cameraAngle[1] = 0;
 	cameraAngle[2] = 0;
+	initCameraPos[0] = 0;
+	initCameraPos[1] = 0;
+	initCameraPos[2] = 0;
+	initCameraAngle[0] = 0;
+	initCameraAngle[1] = 0;
+	initCameraAngle[2] = 0;
 	N_ringPos[0] = N_RING_X;
 	N_ringPos[1] = N_RING_Y;
 	N_ringPos[2] = N_RING_Z;
@@ -154,6 +166,12 @@ void Orbit::setup(){
 	cameraAngle[0] = 0;
 	cameraAngle[1] = 0;
 	cameraAngle[2] = 0;
+	initCameraPos[0] = 0;
+	initCameraPos[1] = 0;
+	initCameraPos[2] = 0;
+	initCameraAngle[0] = 0;
+	initCameraAngle[1] = 0;
+	initCameraAngle[2] = 0;
 	N_ringPos[0] = N_RING_X;
 	N_ringPos[1] = N_RING_Y;
 	N_ringPos[2] = N_RING_Z;
@@ -172,6 +190,18 @@ void Orbit::setCameraAngleXYZ(float X,float Y,float Z){
 	cameraAngle[0] = X;
 	cameraAngle[1] = Y;
 	cameraAngle[2] = -1.0 * Z;
+}
+
+void Orbit::setInitCameraPosXYZ(float X,float Y,float Z){
+	initCameraPos[0] = X;
+	initCameraPos[1] = Y;
+	initCameraPos[2] = Z;
+}
+
+void Orbit::setInitCameraAngleXYZ(float X,float Y,float Z){
+	initCameraAngle[0] = X;
+	initCameraAngle[1] = Y;
+	initCameraAngle[2] = -1.0 * Z;
 }
 
 void Orbit::addPoint(float posX,float posY,float posZ){
@@ -195,7 +225,6 @@ void Orbit::cycle(){
 	avePointY = sam/pointY.size();
 }
 
-
 //float Orbit::getPointX(){return avePointX;}
 //float Orbit::getPointY(float pointZ){return coeA * pointZ * pointZ + coeB * pointZ + coeC;}//カメラの座標系
 float Orbit::getPointY(){return avePointY;}
@@ -211,15 +240,15 @@ void Orbit::addPointView(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud){
 		addSphereCloud(cloud,float(-0.07 * i),getPointY(),getPointZ(float(-0.07 * i)),0,255,0);
 	}
 
-	rotationY(cloud,cameraAngle[1]);
-	rotationZ(cloud,cameraAngle[2]);
+	rotationY(cloud,initCameraAngle[1]);
+	rotationZ(cloud,initCameraAngle[2]);
 
-	moveCloud(cloud,cameraPos[0],cameraPos[1],cameraPos[2]);
+	moveCloud(cloud,initCameraPos[0],initCameraPos[1],initCameraPos[2]);
 }
 
 bool Orbit::passCheckN(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,float* Z){
 	float shuttlePoint[3];
-	float ringX = N_RING_X - cameraPos[0];
+	float ringX = N_RING_X - initCameraPos[0];
 
 	ringX = ringX / cos(cameraAngle[2]);
 
@@ -272,7 +301,7 @@ bool Orbit::passCheckN(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,fl
 	//rotationY(shuttlePoint,cameraAngle[1]);
 	rotationZ(shuttlePoint,cameraAngle[2]);
 	//rotationY(shuttlePoint,cameraAngle[1]);*/
-	moveCloud(shuttlePoint,cameraPos[0],cameraPos[1],cameraPos[2]);
+	moveCloud(shuttlePoint,initCameraPos[0],initCameraPos[1],initCameraPos[2]);
 	addSphereCloud(cloud,shuttlePoint[0],shuttlePoint[1],shuttlePoint[2],0,0,255);
 
 	*Y = shuttlePoint[1] - N_RING_Y;
@@ -385,8 +414,18 @@ void Orbit::clusteringContainer(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pc
 		dist = pow(dist,0.5);
 		//printf("%f\n",dist);
 		if(dist >= DIST_VALUE -0.06  && dist <= DIST_VALUE + 0.06){
-			addPoint(-1.0*xyz_centroid[2],xyz_centroid[0],-1.0*xyz_centroid[1]);//カメラの座標からロボットの座標に変換しながら保存する
-			addSphereCloud(temCloud,-1.0*xyz_centroid[2],xyz_centroid[0],-1.0*xyz_centroid[1],255,0,0);
+			float xyz_centroid_buf[3];
+			for(int i = 0;i < 3;i++){
+				xyz_centroid_buf[i] = xyz_centroid[i];
+			}
+			rotationX(xyz_centroid_buf,M_PI/2.0);
+      rotationZ(xyz_centroid_buf,-M_PI/2.0);
+      rotationY(xyz_centroid_buf,cameraAngle[1]);
+      rotationZ(xyz_centroid_buf,cameraAngle[2]);
+      moveCloud(xyz_centroid_buf,cameraPos[0]-initCameraPos[0],cameraPos[1]-initCameraPos[1],cameraPos[2]-initCameraPos[2]);
+			printf("y=%f\n",cameraPos[1]-initCameraPos[1]);
+			addPoint(xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2]);//カメラの座標からロボットの座標に変換しながら保存する
+			addSphereCloud(temCloud,xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2],255,0,0);
 			mergeCloud(cloud_filtered,temCloud,cloud_filtered);
 		}
 		j++;
