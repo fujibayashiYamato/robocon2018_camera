@@ -27,8 +27,12 @@
  #include <chrono>
  #include <sys/time.h>
  #include <limits.h>
- //#include <sys/stat.h>
- //#include <sys/types.h>
+ #include <sys/stat.h>
+ #include <sys/types.h>
+#include <time.h>
+#include <fstream>
+#include <string>
+
 
  #include "pcl.hpp"
  #include "pin.hpp"
@@ -123,7 +127,8 @@ public:
     IMAGE = 0,
     CLOUD,
     BOTH,
-    PCL
+    PCL,
+    REC
   };
 
 private:
@@ -247,6 +252,9 @@ private:
       break;
     case PCL:
       pclViewer();
+      break;
+    case REC:
+      recViewer();
       break;
     }
   }
@@ -425,6 +433,7 @@ private:
   }
 
   int orbitFlg = 0;
+  int key_i_flg = 0;
 
   void pclViewer(){
     Orbit orbit;
@@ -623,7 +632,7 @@ private:
           }
         }
         orbit.mergeCloud(campus,orbitCloud,campus);
-        visualizer->updatePointCloud(cloud, cloudName);
+        visualizer->updatePointCloud(campus, cloudName);
         //gettimeofday(&printTime, NULL);
         //printf("%d\n",printTime.tv_usec - oldTime);
         /*if(printTime.tv_sec - oldTime >= 1){
@@ -647,6 +656,93 @@ private:
   	visualizer->close();
   }
 
+  void recViewer(){
+    cv::Mat color, depth;
+    pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Rec Viewer"));
+    const std::string cloudName = "rendered";
+
+    lock.lock();
+    color = this->color;
+    depth = this->depth;
+    updateCloud = false;
+    lock.unlock();
+
+    createCloud(depth, color, cloud);
+
+    visualizer->addPointCloud(cloud, cloudName);
+    visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
+    visualizer->initCameraParameters();
+    visualizer->setBackgroundColor(0, 0, 0);
+    visualizer->setPosition(mode == REC ? color.cols : 0, 0);
+    visualizer->setSize(color.cols, color.rows);
+    visualizer->setShowFPS(true);
+    visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
+    visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
+    string name;
+    ofstream fout;
+    struct timeval recordTime;
+    time_t old_sec;
+    suseconds_t old_usec;
+    for(; running && ros::ok();)
+    {
+      if(updateCloud)
+      {
+        lock.lock();
+        color = this->color;
+        depth = this->depth;
+        updateCloud = false;
+        lock.unlock();
+
+        createCloud(depth, color, cloud);
+
+        visualizer->updatePointCloud(cloud, cloudName);
+      }
+      if(key_i_flg >= 1)
+      {
+        if(key_i_flg == 1){
+          key_i_flg = 2;
+          name = "src/iai_kinect2/kinect2_viewer/pcd/";
+          time_t now = time(NULL);
+          struct tm *tm_now  = localtime(&now);
+          name += std::to_string(tm_now->tm_year + 1900);
+          name += ".";
+          name += std::to_string(tm_now->tm_mon + 1);
+          name += ".";
+          name += std::to_string(tm_now->tm_mday);
+          name += "_";
+          name += std::to_string(tm_now->tm_hour);
+          name += ":";
+          name += std::to_string(tm_now->tm_min);
+          name += ":";
+          name += std::to_string(tm_now->tm_sec);
+          mkdir(name.c_str(), 0775);
+          fout.open(name + "/timeStamp.txt");
+          gettimeofday(&recordTime, NULL);
+          old_sec = recordTime.tv_sec;
+          old_usec = recordTime.tv_usec;
+        }
+        oss.str("");
+        oss << "./" << name << "/" << std::setfill('0') << std::setw(4) << frame;
+        const std::string baseName = oss.str();
+        const std::string cloudName = baseName + "_cloud.pcd";
+        OUT_INFO("saving cloud: " << cloudName);
+        writer.writeBinary(cloudName, *cloud);
+        //OUT_INFO("saving complete!");
+        gettimeofday(&recordTime, NULL);
+        fout << std::setfill('0') << std::setw(4) << frame;
+        fout << "_cloud.pcd" << endl;
+        fout << std::to_string((recordTime.tv_sec - old_sec)+ (recordTime.tv_usec - old_usec)/1000.0/1000.0) << endl;
+        ++frame;
+        if(key_i_flg == 3){
+          fout.close();
+          key_i_flg = 0;
+        }
+      }
+      visualizer->spinOnce(10);
+    }
+    visualizer->close();
+  }
+
   void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *)
   {
     if(event.keyUp())
@@ -660,6 +756,9 @@ private:
       case ' ':
       case 's':
         save = true;
+        break;
+      case 'i':
+        key_i_flg++;
         break;
       }
     }
@@ -893,6 +992,10 @@ int main(int argc, char **argv)
     else if(param == "pcl")
     {
       mode = Receiver::PCL;
+    }
+    else if(param == "rec")
+    {
+      mode = Receiver::REC;
     }
     else
     {
