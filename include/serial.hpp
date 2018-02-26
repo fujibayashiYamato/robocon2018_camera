@@ -24,7 +24,6 @@
 #define DEFAULT_LINEFEED '\r'
 #define SERIAL_BUFFER_LENGTH 256
 
-
 class Serial;
 class SerialInterface{
 protected:
@@ -138,8 +137,7 @@ public:
 	virtual int setup(int baudrate,int parity=SERIAL_PARITY_NONE,int wordLength=8){_serial_mode=SERIAL_MODE_LOCAL;defaultInterface=new Receiver(this);return _setup(baudrate,*defaultInterface,wordLength,parity);};
 };
 
-#include "serial.hpp"
-#include <stdio.h>
+
 void defaultRxIntFunc(char)
 {
     return;
@@ -215,7 +213,7 @@ void Serial::vprintf(const char *format,va_list arg)
     writeString(buffer);
 }
 
-#endif//__cplusplus
 
+#endif//__cplusplus
 
 #endif//SERIAL_HPP

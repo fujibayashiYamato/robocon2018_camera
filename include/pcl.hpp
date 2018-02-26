@@ -654,5 +654,4 @@ void Orbit::coatView(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud){
 	mergeCloud(cloud,coatCloud,cloud);
 }
 
-
 #endif // ORBIT_PREDICION_HPP

@@ -256,5 +256,4 @@ void SerialDevice::writeChar(char value) {
 	}
 }
 
-
 #endif//PIN_HPP

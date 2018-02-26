@@ -94,13 +94,9 @@ Video::Video(string str){
 
 void Video::recSetup(){
   flg = 0;
-  printf("0\n");
   name = filePass;
-  printf("1\n");
   time_t now = time(NULL);
-  printf("2\n");
   struct tm *tm_now  = localtime(&now);
-  printf("3\n");
   name += std::to_string(tm_now->tm_year + 1900);
   name += ".";
   name += std::to_string(tm_now->tm_mon + 1);
@@ -112,17 +108,12 @@ void Video::recSetup(){
   name += std::to_string(tm_now->tm_min);
   name += ":";
   name += std::to_string(tm_now->tm_sec);
-  printf("4\n");
   mkdir(name.c_str(), 0775);
-  printf("5\n");
   fout.open(name + "/timeStamp.txt");
-  printf("6\n");
   gettimeofday(&recordTime, NULL);
-  printf("7\n");
   old_sec = recordTime.tv_sec;
   old_usec = recordTime.tv_usec;
   frame = 0;
-  printf("8\n");
 }
 
 void Video::recCycle(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud){
