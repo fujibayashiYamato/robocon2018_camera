@@ -6,3 +6,24 @@ rosbag play bagfiles/2018-02-26-15-47-55.bag
 
 変換(親、子、時間)
 listener.lookupTransform("/turtle2", "/turtle1",ros::Time(0), transform);
+
+tf_treeが開けるよ
+rqt plaguin vijiara tf_tree
+
+rqt_graphがみれる
+rqt_graph
+
+rvizでtf
+fixd frame を原点に
+Add TF
+
+cameraの名前　ジョイント
+rostopic echo /kinect2/sd/image_color_rect | grep frame_id
+kinect2_ir_optical_frame
+
+やり方
+listener.lookupTransform("/turtle2", "/turtle1",ros::Time(0), transform);
+//"/turtle2"から見た"/turtle1"のデータをtransformに入れる
+transformからほしい値を出す
+
+ランチにまとめると楽だよ

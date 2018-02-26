@@ -486,12 +486,12 @@ private:
     float num[3] = {0.0};
     bool start_flg = false;
     bool setTime_flg = true;
+    int ringMode = 0;
 
     float robotPos[3] = {0.0};
     float robotAngle[3] = {0.0};
     float ringShift[2] = {0.0};
     float pointY[10] = {1.05,1.8,2.25,2.4,2.25,1.8,1.05,0.0,-1.35,-3.0};
-
 
     struct timeval printTime;
     struct timeval recordTime;
@@ -591,16 +591,25 @@ private:
             orbit.cycle();
             orbit.addPointView(buf);
             orbit.coatView(buf);
-            if(orbit.passCheckN(buf,&ringShift[0],&ringShift[1])){
-              printf("GOAL\n\n");
-              ftouc4((unsigned char *)pointOut[0],0.0001);
-              ftouc4((unsigned char *)pointOut[1],0.0);
-            }else{
-              if(fmod(ringShift[0],0.5) == 0.0 || ringShift[0] == 0.0)ringShift[0] -= 0.001;
-              printf("Y:%f Z:%f\n",ringShift[0],ringShift[1]);
-              ftouc4((unsigned char *)pointOut[0],ringShift[0]);
-              ftouc4((unsigned char *)pointOut[1],ringShift[1]);
+            switch (ringMode) {
+            case 0:
+            case 1:
+              if(orbit.passCheckN(buf,&ringShift[0],&ringShift[1])){
+                printf("GOAL\n\n");
+                ftouc4((unsigned char *)pointOut[0],0.0);
+                ftouc4((unsigned char *)pointOut[1],0.0);
+                ringMode++;
+              }else{
+                printf("Y:%f Z:%f\n",ringShift[0],ringShift[1]);
+                ftouc4((unsigned char *)pointOut[0],ringShift[0]);
+                ftouc4((unsigned char *)pointOut[1],ringShift[1]);
+              }
+              break;
+            case 2:
+              ringMode = 0;
+              break;
             }
+
             stringBond(strOut,pointOut[0],pointOut[1]);
             for (int i = 0; i < 2; i++) {
               for (int j = 0; j < 4; j++) {
@@ -613,7 +622,6 @@ private:
             for(int i = 0;i<8;i++){
               serial.writeChar(strOut[i]);
             }
-            //serial.writeChar('\r');
 
             *orbitCloud = *buf;
             start_flg = false;
