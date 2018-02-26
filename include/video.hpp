@@ -72,6 +72,10 @@ public:
   void recSetup();
   void recCycle(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
   void recEnd();
+
+  /*void playSetup();
+  void playCycle(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
+  void playEnd();*/
 private:
   int flg;
   string name;

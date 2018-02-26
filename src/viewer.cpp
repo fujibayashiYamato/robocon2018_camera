@@ -32,6 +32,7 @@
 #include <time.h>
 #include <fstream>
 #include <string>
+#include <math.h>
 
 
 #include "pcl.hpp"
@@ -128,13 +129,14 @@ public:
     CLOUD,
     BOTH,
     PCL,
-    REC
+    REC,
+    PLAY
   };
 
 private:
-  std::mutex lock;
+  mutex lock;
 
-  const std::string topicColor, topicDepth;
+  const string topicColor, topicDepth;
   const bool useExact, useCompressed;
 
   bool updateImage, updateCloud;
@@ -159,16 +161,16 @@ private:
   message_filters::Synchronizer<ExactSyncPolicy> *syncExact;
   message_filters::Synchronizer<ApproximateSyncPolicy> *syncApproximate;
 
-  std::thread imageViewerThread;
+  thread imageViewerThread;
   Mode mode;
 
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud;
   pcl::PCDWriter writer;
-  std::ostringstream oss;
-  std::vector<int> params;
+  ostringstream oss;
+  vector<int> params;
 
 public:
-  Receiver(const std::string &topicColor, const std::string &topicDepth, const bool useExact, const bool useCompressed)
+  Receiver(const string &topicColor, const string &topicDepth, const bool useExact, const bool useCompressed)
     : topicColor(topicColor), topicDepth(topicDepth), useExact(useExact), useCompressed(useCompressed),
       updateImage(false), updateCloud(false), save(false), running(false), frame(0), queueSize(5),
       nh("~"), spinner(0), it(nh), mode(CLOUD)
@@ -200,8 +202,8 @@ private:
     this->mode = mode;
     running = true;
 
-    std::string topicCameraInfoColor = topicColor.substr(0, topicColor.rfind('/')) + "/camera_info";
-    std::string topicCameraInfoDepth = topicDepth.substr(0, topicDepth.rfind('/')) + "/camera_info";
+    string topicCameraInfoColor = topicColor.substr(0, topicColor.rfind('/')) + "/camera_info";
+    string topicCameraInfoDepth = topicDepth.substr(0, topicDepth.rfind('/')) + "/camera_info";
 
     image_transport::TransportHints hints(useCompressed ? "compressed" : "raw");
     subImageColor = new image_transport::SubscriberFilter(it, topicColor, queueSize, hints);
@@ -222,14 +224,14 @@ private:
 
     spinner.start();
 
-    std::chrono::milliseconds duration(1);
+    chrono::milliseconds duration(1);
     while(!updateImage || !updateCloud)
     {
       if(!ros::ok())
       {
         return;
       }
-      std::this_thread::sleep_for(duration);
+      this_thread::sleep_for(duration);
     }
     cloud = pcl::PointCloud<pcl::PointXYZRGBA>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBA>());
     cloud->height = color.rows;
@@ -247,7 +249,7 @@ private:
       imageViewer();
       break;
     case BOTH:
-      imageViewerThread = std::thread(&Receiver::imageViewer, this);
+      imageViewerThread = thread(&Receiver::imageViewer, this);
       cloudViewer();
       break;
     case PCL:
@@ -255,6 +257,9 @@ private:
       break;
     case REC:
       recViewer();
+      break;
+    case PLAY:
+      playViewer();
       break;
     }
   }
@@ -313,10 +318,10 @@ private:
   void imageViewer()
   {
     cv::Mat color, depth, depthDisp, combined;
-    std::chrono::time_point<std::chrono::high_resolution_clock> start, now;
+    chrono::time_point<chrono::high_resolution_clock> start, now;
     double fps = 0;
     size_t frameCount = 0;
-    std::ostringstream oss;
+    ostringstream oss;
     const cv::Point pos(5, 15);
     const cv::Scalar colorText = CV_RGB(255, 255, 255);
     const double sizeText = 0.5;
@@ -326,7 +331,7 @@ private:
     cv::namedWindow("Image Viewer");
     oss << "starting...";
 
-    start = std::chrono::high_resolution_clock::now();
+    start = chrono::high_resolution_clock::now();
     for(; running && ros::ok();)
     {
       if(updateImage)
@@ -338,8 +343,8 @@ private:
         lock.unlock();
 
         ++frameCount;
-        now = std::chrono::high_resolution_clock::now();
-        double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count() / 1000.0;
+        now = chrono::high_resolution_clock::now();
+        double elapsed = chrono::duration_cast<chrono::milliseconds>(now - start).count() / 1000.0;
         if(elapsed >= 1.0)
         {
           fps = frameCount / elapsed;
@@ -386,7 +391,7 @@ private:
   {
     cv::Mat color, depth;
     pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Cloud Viewer"));
-    const std::string cloudName = "rendered";
+    const string cloudName = "rendered";
 
     lock.lock();
     color = this->color;
@@ -442,7 +447,7 @@ private:
 
   	cv::Mat color, depth;
   	pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("PCL Viewer"));
-  	const std::string cloudName = "rendered";
+  	const string cloudName = "rendered";
   	lock.lock();
   	color = this->color;
   	depth = this->depth;
@@ -660,7 +665,7 @@ private:
     Video video("src/iai_kinect2/kinect2_viewer/pcd/");
     cv::Mat color, depth;
     pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Rec Viewer"));
-    const std::string cloudName = "rendered";
+    const string cloudName = "rendered";
 
     lock.lock();
     color = this->color;
@@ -679,11 +684,7 @@ private:
     visualizer->setShowFPS(true);
     visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
     visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
-    string name;
-    ofstream fout;
-    struct timeval recordTime;
-    time_t old_sec;
-    suseconds_t old_usec;
+
     for(; running && ros::ok();)
     {
       if(updateCloud)
@@ -700,9 +701,7 @@ private:
       }
       switch (key_i_flg) {
         case 1:
-          printf("_0\n");
           video.recSetup();
-          printf("_1\n");
           key_i_flg = 2;
           break;
         case 2:
@@ -712,6 +711,111 @@ private:
           video.recEnd();
           key_i_flg = 0;
           break;
+      }
+      visualizer->spinOnce(10);
+    }
+    visualizer->close();
+  }
+
+  void playViewer(){
+    //Video video("src/iai_kinect2/kinect2_viewer/pcd/");
+    cv::Mat color, depth;
+    pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Play Viewer"));
+    const string cloudName = "rendered";
+
+    lock.lock();
+    color = this->color;
+    depth = this->depth;
+    updateCloud = false;
+    lock.unlock();
+
+    createCloud(depth, color, cloud);
+
+    visualizer->addPointCloud(cloud, cloudName);
+    visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
+    visualizer->initCameraParameters();
+    visualizer->setBackgroundColor(0, 0, 0);
+    visualizer->setPosition(mode == PLAY ? color.cols : 0, 0);
+    visualizer->setSize(color.cols, color.rows);
+    visualizer->setShowFPS(true);
+    visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
+    visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
+
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr playCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    string filePos = "src/iai_kinect2/kinect2_viewer/pcd/2018.2.26_11:9:8/";
+    ifstream fin;
+    vector<string> fileName;
+    vector<float> pcdTime;
+
+    struct timeval recordTime;
+    time_t old_sec;
+    suseconds_t old_usec;
+    float timeNow;
+    int pcdCount = 0;
+
+    fin.open(filePos + "timeStamp.txt");
+    string str;
+
+    while(true){
+      fin >> str;
+      if (fin.fail()) break;
+      fileName.push_back(str);
+      //cout << std << endl;
+      fin >> str;
+      pcdTime.push_back(stod(str));
+      //cout << std << endl;
+    }
+
+    /*for(int i = 0;i<fileName.size();i++){
+      cout << fileName[i] << ":" << pcdTime[i] << endl;
+    }*/
+
+    for(; running && ros::ok();)
+    {
+      if(updateCloud)
+      {
+        lock.lock();
+        color = this->color;
+        depth = this->depth;
+        updateCloud = false;
+        lock.unlock();
+
+        createCloud(depth, color, cloud);
+        //---
+        gettimeofday(&recordTime, NULL);
+
+        switch (key_i_flg) {
+        case 1:
+          old_sec = recordTime.tv_sec;
+          old_usec = recordTime.tv_usec;
+          pcdCount = 0;
+          key_i_flg = 2;
+          break;
+        case 2:{
+          timeNow = (recordTime.tv_sec - old_sec) + (recordTime.tv_usec - old_usec)/1000.0/1000.0;
+          float diff = fabsf(pcdTime[pcdCount] - timeNow);
+          while(true){
+            if(pcdCount >= fileName.size() - 1)break;
+            else if(diff <= fabsf(pcdTime[pcdCount + 1] - timeNow))break;
+            else{
+              pcdCount++;
+              diff = fabsf(pcdTime[pcdCount] - timeNow);
+            }
+          }
+          cout << pcdCount << endl;
+          if (pcl::io::loadPCDFile (filePos + fileName[pcdCount], *playCloud) < 0)
+          {
+            cout << "Error loading model cloud." << endl;
+          }
+          if(pcdCount >= fileName.size() - 1)key_i_flg = 0;
+          break;}
+        default:
+          key_i_flg = 0;
+          break;
+        }
+
+        //---
+        visualizer->updatePointCloud(playCloud, cloudName);
       }
       visualizer->spinOnce(10);
     }
@@ -768,7 +872,7 @@ private:
 
       for(int c = 0; c < in.cols; ++c, ++itI, ++itO)
       {
-        *itO = (uint8_t)std::min((*itI * maxInt / maxValue), 255.0f);
+        *itO = (uint8_t)min((*itI * maxInt / maxValue), 255.0f);
       }
     }
 
@@ -798,7 +902,7 @@ private:
 
   void createCloud(const cv::Mat &depth, const cv::Mat &color, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &cloud) const
   {
-    const float badPoint = std::numeric_limits<float>::quiet_NaN();
+    const float badPoint = numeric_limits<float>::quiet_NaN();
 
     #pragma omp parallel for
     for(int r = 0; r < depth.rows; ++r)
@@ -834,12 +938,12 @@ private:
   void saveCloudAndImages(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr cloud, const cv::Mat &color, const cv::Mat &depth, const cv::Mat &depthColored)
   {
     oss.str("");
-    oss << "./" << std::setfill('0') << std::setw(4) << frame;
-    const std::string baseName = oss.str();
-    const std::string cloudName = baseName + "_cloud.pcd";
-    const std::string colorName = baseName + "_color.jpg";
-    const std::string depthName = baseName + "_depth.png";
-    const std::string depthColoredName = baseName + "_depth_colored.png";
+    oss << "./" << setfill('0') << setw(4) << frame;
+    const string baseName = oss.str();
+    const string cloudName = baseName + "_cloud.pcd";
+    const string colorName = baseName + "_color.jpg";
+    const string depthName = baseName + "_depth.png";
+    const string depthColoredName = baseName + "_depth_colored.png";
 
     OUT_INFO("saving cloud: " << cloudName);
     writer.writeBinary(cloudName, *cloud);
@@ -877,15 +981,15 @@ private:
   }
 };
 
-void help(const std::string &path)
+void help(const string &path)
 {
-  std::cout << path << FG_BLUE " [options]" << std::endl
-            << FG_GREEN "  name" NO_COLOR ": " FG_YELLOW "'any string'" NO_COLOR " equals to the kinect2_bridge topic base name" << std::endl
-            << FG_GREEN "  mode" NO_COLOR ": " FG_YELLOW "'qhd'" NO_COLOR ", " FG_YELLOW "'hd'" NO_COLOR ", " FG_YELLOW "'sd'" NO_COLOR " or " FG_YELLOW "'ir'" << std::endl
-            << FG_GREEN "  visualization" NO_COLOR ": " FG_YELLOW "'image'" NO_COLOR ", " FG_YELLOW "'cloud'" NO_COLOR " or " FG_YELLOW "'both'" << std::endl
-            << FG_GREEN "  options" NO_COLOR ":" << std::endl
-            << FG_YELLOW "    'compressed'" NO_COLOR " use compressed instead of raw topics" << std::endl
-            << FG_YELLOW "    'approx'" NO_COLOR " use approximate time synchronization" << std::endl;
+  cout << path << FG_BLUE " [options]" << endl
+            << FG_GREEN "  name" NO_COLOR ": " FG_YELLOW "'any string'" NO_COLOR " equals to the kinect2_bridge topic base name" << endl
+            << FG_GREEN "  mode" NO_COLOR ": " FG_YELLOW "'qhd'" NO_COLOR ", " FG_YELLOW "'hd'" NO_COLOR ", " FG_YELLOW "'sd'" NO_COLOR " or " FG_YELLOW "'ir'" << endl
+            << FG_GREEN "  visualization" NO_COLOR ": " FG_YELLOW "'image'" NO_COLOR ", " FG_YELLOW "'cloud'" NO_COLOR " or " FG_YELLOW "'both'" << endl
+            << FG_GREEN "  options" NO_COLOR ":" << endl
+            << FG_YELLOW "    'compressed'" NO_COLOR " use compressed instead of raw topics" << endl
+            << FG_YELLOW "    'approx'" NO_COLOR " use approximate time synchronization" << endl;
 }
 
 int main(int argc, char **argv)
@@ -906,16 +1010,16 @@ int main(int argc, char **argv)
     return 0;
   }
 
-  std::string ns = K2_DEFAULT_NS;
-  std::string topicColor = K2_TOPIC_QHD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
-  std::string topicDepth = K2_TOPIC_QHD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
+  string ns = K2_DEFAULT_NS;
+  string topicColor = K2_TOPIC_QHD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
+  string topicDepth = K2_TOPIC_QHD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
   bool useExact = true;
   bool useCompressed = false;
   Receiver::Mode mode = Receiver::CLOUD;
 
   for(size_t i = 1; i < (size_t)argc; ++i)
   {
-    std::string param(argv[i]);
+    string param(argv[i]);
 
     if(param == "-h" || param == "--help" || param == "-?" || param == "--?")
     {
@@ -971,6 +1075,10 @@ int main(int argc, char **argv)
     else if(param == "rec")
     {
       mode = Receiver::REC;
+    }
+    else if(param == "play")
+    {
+      mode = Receiver::PLAY;
     }
     else
     {
