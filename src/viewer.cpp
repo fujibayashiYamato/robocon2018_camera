@@ -1,69 +1,70 @@
 /**
- * Copyright 2014 University of Bremen, Institute for Artificial Intelligence
- * Author: Thiemo Wiedemeyer <wiedemeyer@cs.uni-bremen.de>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+* Copyright 2014 University of Bremen, Institute for Artificial Intelligence
+* Author: Thiemo Wiedemeyer <wiedemeyer@cs.uni-bremen.de>
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
 
- #include <stdlib.h>
- #include <stdio.h>
- #include <iostream>
- #include <sstream>
- #include <string>
- #include <vector>
- #include <cmath>
- #include <mutex>
- #include <thread>
- #include <chrono>
- #include <sys/time.h>
- #include <limits.h>
- #include <sys/stat.h>
- #include <sys/types.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <cmath>
+#include <mutex>
+#include <thread>
+#include <chrono>
+#include <sys/time.h>
+#include <limits.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <time.h>
 #include <fstream>
 #include <string>
 
 
- #include "pcl.hpp"
- #include "pin.hpp"
+#include "pcl.hpp"
+#include "pin.hpp"
+#include "video.hpp"
 
- #include <pcl/point_cloud.h>
- #include <pcl/point_types.h>
- #include <pcl/io/pcd_io.h>
- #include <pcl/visualization/cloud_viewer.h>
- #include <pcl_conversions/pcl_conversions.h>
- #include <pcl/ros/conversions.h>
- #include <pcl/sample_consensus/model_types.h>
- #include <pcl/sample_consensus/method_types.h>
- #include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/visualization/cloud_viewer.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/ros/conversions.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
 
- #include <opencv2/opencv.hpp>
+#include <opencv2/opencv.hpp>
 
- #include <ros/ros.h>
- #include <ros/spinner.h>
- #include <sensor_msgs/CameraInfo.h>
- #include <sensor_msgs/Image.h>
- #include <sensor_msgs/PointCloud2.h>
+#include <ros/ros.h>
+#include <ros/spinner.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/PointCloud2.h>
 
- #include <cv_bridge/cv_bridge.h>
+#include <cv_bridge/cv_bridge.h>
 
- #include <image_transport/image_transport.h>
- #include <image_transport/subscriber_filter.h>
+#include <image_transport/image_transport.h>
+#include <image_transport/subscriber_filter.h>
 
- #include <message_filters/subscriber.h>
- #include <message_filters/synchronizer.h>
- #include <message_filters/sync_policies/exact_time.h>
- #include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/exact_time.h>
+#include <message_filters/sync_policies/approximate_time.h>
 
 #include <ros/ros.h>
 #include <ros/spinner.h>
@@ -82,7 +83,6 @@
 
 #include <kinect2_bridge/kinect2_definitions.h>
 
-#include <vector>
 using namespace std;
 
 typedef union{
@@ -657,6 +657,7 @@ private:
   }
 
   void recViewer(){
+    Video video("src/iai_kinect2/kinect2_viewer/pcd/");
     cv::Mat color, depth;
     pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Rec Viewer"));
     const std::string cloudName = "rendered";
@@ -697,46 +698,20 @@ private:
 
         visualizer->updatePointCloud(cloud, cloudName);
       }
-      if(key_i_flg >= 1)
-      {
-        if(key_i_flg == 1){
+      switch (key_i_flg) {
+        case 1:
+          printf("_0\n");
+          video.recSetup();
+          printf("_1\n");
           key_i_flg = 2;
-          name = "src/iai_kinect2/kinect2_viewer/pcd/";
-          time_t now = time(NULL);
-          struct tm *tm_now  = localtime(&now);
-          name += std::to_string(tm_now->tm_year + 1900);
-          name += ".";
-          name += std::to_string(tm_now->tm_mon + 1);
-          name += ".";
-          name += std::to_string(tm_now->tm_mday);
-          name += "_";
-          name += std::to_string(tm_now->tm_hour);
-          name += ":";
-          name += std::to_string(tm_now->tm_min);
-          name += ":";
-          name += std::to_string(tm_now->tm_sec);
-          mkdir(name.c_str(), 0775);
-          fout.open(name + "/timeStamp.txt");
-          gettimeofday(&recordTime, NULL);
-          old_sec = recordTime.tv_sec;
-          old_usec = recordTime.tv_usec;
-        }
-        oss.str("");
-        oss << "./" << name << "/" << std::setfill('0') << std::setw(4) << frame;
-        const std::string baseName = oss.str();
-        const std::string cloudName = baseName + "_cloud.pcd";
-        OUT_INFO("saving cloud: " << cloudName);
-        writer.writeBinary(cloudName, *cloud);
-        //OUT_INFO("saving complete!");
-        gettimeofday(&recordTime, NULL);
-        fout << std::setfill('0') << std::setw(4) << frame;
-        fout << "_cloud.pcd" << endl;
-        fout << std::to_string((recordTime.tv_sec - old_sec)+ (recordTime.tv_usec - old_usec)/1000.0/1000.0) << endl;
-        ++frame;
-        if(key_i_flg == 3){
-          fout.close();
+          break;
+        case 2:
+          video.recCycle(cloud);
+          break;
+        case 3:
+          video.recEnd();
           key_i_flg = 0;
-        }
+          break;
       }
       visualizer->spinOnce(10);
     }
