@@ -1,8 +1,9 @@
 データの保存
-rosbag record /kinect2/sd/image_color_rect /kinect2/sd/image_color_rect
+rosbag record /kinect2/sd/image_color_rect /kinect2/sd/image_depth_rect /kinect2/sd/camera_info
 
 データの再生
 rosbag play bagfiles/2018-02-26-15-47-55.bag
+2018-02-27-09-35-54.bag
 
 変換(親、子、時間)
 listener.lookupTransform("/turtle2", "/turtle1",ros::Time(0), transform);
@@ -27,3 +28,4 @@ listener.lookupTransform("/turtle2", "/turtle1",ros::Time(0), transform);
 transformからほしい値を出す
 
 ランチにまとめると楽だよ
+roslaunch kinect2_viewer pcl.launch

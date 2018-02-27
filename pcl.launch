@@ -1,0 +1,4 @@
+<launch>
+    <node pkg="kinect2_viewer" type="kinect2_viewer" name="kinect2_viewer" args="kinect2 sd cloud"/>
+    <node pkg="rosbag" type="play" name="player" output="screen" args="--clock /home/ubuntu/bagfiles/free.bag"/>
+</launch>
