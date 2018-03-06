@@ -34,10 +34,9 @@
 #include <string>
 #include <math.h>
 
-
 #include "pcl.hpp"
-#include "pin.hpp"
-#include "video.hpp"
+#include "serial.hpp"
+#include "util.hpp"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -128,9 +127,7 @@ public:
     IMAGE = 0,
     CLOUD,
     BOTH,
-    PCL,
-    REC,
-    PLAY
+    PCL
   };
 
 private:
@@ -254,12 +251,6 @@ private:
       break;
     case PCL:
       pclViewer();
-      break;
-    case REC:
-      recViewer();
-      break;
-    case PLAY:
-      playViewer();
       break;
     }
   }
@@ -439,11 +430,12 @@ private:
 
   int orbitFlg = 0;
   int key_i_flg = 0;
+  //#define CAMERA_ANGLE_Y 0.0//-22.5//degry
+  int CAMERA_ANGLE_Y = 0.0;
 
   void pclViewer(){
     Orbit orbit;
-  	SerialDevice serial;
-  	serial.setup(9600);
+    RosSerial serial;
 
   	cv::Mat color, depth;
   	pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("PCL Viewer"));
@@ -466,6 +458,7 @@ private:
   	visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
   	visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
 
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
   	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr oldCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
   	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr octreeCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
   	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr statisticalOutlierCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
@@ -479,17 +472,12 @@ private:
 
   	*oldCloud = *cloud;
 
-    char strIn[12] = {0};
-    char strOut[8] = {0};
-    char pointIn[3][4] = {0};
-    char pointOut[2][4] = {0};
-    float num[3] = {0.0};
     bool start_flg = false;
     bool setTime_flg = true;
     int ringMode = 0;
+    Coord<float,float> coord;
+    Coord<float,float> robotCoord;
 
-    float robotPos[3] = {0.0};
-    float robotAngle[3] = {0.0};
     float ringShift[2] = {0.0};
     float pointY[10] = {1.05,1.8,2.25,2.4,2.25,1.8,1.05,0.0,-1.35,-3.0};
 
@@ -515,135 +503,83 @@ private:
         gettimeofday(&printTime, NULL);
 
         //serial
-        if(serial.charAvailable()){
-          printf("%d:\n",count);
+        if(serial.dataAvailable()){
+          //printf("%d:\n",count);
           count++;
-          for(int i = 0;i < 12;i++){strIn[i] = 0;}
-
-          strIn[0] = serial.readChar();
-          int numRead = 0;
-
-          while(true){
-            printf("ok\r");
-            if(serial.charAvailable()){
-              numRead++;
-              strIn[numRead] = serial.readChar();
-              if(numRead >= 11)break;
-            }
-            /*if(printTime.tv_sec - oldTime >= 1){
-              printf("erorr\n");
-              break;
-            }*/
-          }
-
-          for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 4; j++) {
-              print_binary_char(strIn[i * 4 + j]);
-              putchar(' ');
-            }
-            putchar('\n');
-          }
-
-          for(int i = 0;i < 3;i++){
-            for(int j = 0;j < 4;j++){
-              pointIn[i][j] = strIn[i*4 + j];
-            }
-          }
-          //printf("%s\n\r", str);
-          for(int i = 0;i < 3;i++){
-            num[i] = 0.0;
-            num[i] = uc4tof((unsigned char*)pointIn[i]);
-          }
-          printf("%f:%f:%f\n\r", num[0],num[1],num[2]);
-          robotPos[0] = num[0];
-          robotPos[1] = num[1];
-          robotPos[2] = 0.011;
-          robotAngle[0] = 0.0;
-          robotAngle[1] = 0.0/180.0 * M_PI;//-24.0/180.0 * M_PI;
-          robotAngle[2] = num[2];
+          serial.getPos(coord);
+          //printf("%f:%f:%f\n", coord.cartesianX(),coord.cartesianY(),coord.angleZ());
+          robotCoord.cartesian(coord.cartesianX(),coord.cartesianY(),0.011);
+          robotCoord.angle(0.0,CAMERA_ANGLE_Y/180.0*M_PI,coord.angleZ());
+          start_flg = true;
+        }else if(key_i_flg == 1){
+          key_i_flg = 0;
+          robotCoord.cartesian(5.515,3.275,0.011);
+          robotCoord.angle(0.0,CAMERA_ANGLE_Y/180.0*M_PI,0.0);
           start_flg = true;
         }
         if(start_flg && setTime_flg){
           setTime_flg = false;
           oldRecordTime = recordTime.tv_sec;
-          orbit.setInitCameraPosXYZ(4.550,3.275,robotPos[2]);
-          orbit.setInitCameraAngleXYZ(0.0,0.0,0.0);
+          orbit.setInitCameraPosXYZ(robotCoord.cartesianX(),robotCoord.cartesianY(),robotCoord.cartesianZ());
+          orbit.setInitCameraAngleXYZ(coord.angleX(),coord.angleY(),coord.angleZ());
+          //orbit.setInitCameraPosXYZ(4.550,3.275,robotCoord.cartesianZ());
+          //orbit.setInitCameraAngleXYZ(0.0,0.0,0.0);
+          //orbit.setCameraPosXYZ(robotCoord.cartesianX(),robotCoord.cartesianY(),robotCoord.cartesianZ());//4.565,2.460,0.14);
+          //orbit.setCameraAngleXYZ(coord.angleX(),coord.angleY(),coord.angleZ());//-1.0*M_PI/6.0
         }
-
         orbit.filter(cloud,campus);
         orbit.rotationX(campus,M_PI/2.0);
         orbit.rotationZ(campus,-M_PI/2.0);
-        orbit.rotationY(campus,robotAngle[1]);
-        orbit.rotationZ(campus,robotAngle[2]);
-        orbit.moveCloud(campus,robotPos[0],robotPos[1],robotPos[2]);
-        orbit.coatView(campus);
+        orbit.rotationY(campus,robotCoord.angleY());
+        orbit.rotationZ(campus,robotCoord.angleZ());
+        orbit.moveCloud(campus,robotCoord.cartesianX(),robotCoord.cartesianY(),robotCoord.cartesianZ());
+
   			//-----------------------------------------
         if(start_flg){
           if(recordTime.tv_sec - oldRecordTime >= 2){
-            for(int i = 0;i < 2;i++){
-              for(int j = 0;j < 4;j++){
-                pointOut[i][j] = 0;
-                //printf("ok\n");
-              }
-            }
-            for(int i = 0;i < 12;i++){strOut[i] = 0;}
             pcl::PointCloud<pcl::PointXYZRGBA>::Ptr buf(new pcl::PointCloud<pcl::PointXYZRGBA>);
             orbit.cycle();
             orbit.addPointView(buf);
-            orbit.coatView(buf);
+            //orbit.coatView(buf);
             switch (ringMode) {
-            case 0:
-            case 1:
+            case 0://TZ1
+            case 1://TZ2
               if(orbit.passCheckN(buf,&ringShift[0],&ringShift[1])){
                 printf("GOAL\n\n");
-                ftouc4((unsigned char *)pointOut[0],0.0);
-                ftouc4((unsigned char *)pointOut[1],0.0);
+                ringShift[0] = 0.0;
+                ringShift[1] = 0.0;
                 ringMode++;
               }else{
                 printf("Y:%f Z:%f\n",ringShift[0],ringShift[1]);
-                ftouc4((unsigned char *)pointOut[0],ringShift[0]);
-                ftouc4((unsigned char *)pointOut[1],ringShift[1]);
               }
               break;
-            case 2:
+            case 2://TZ3
               ringMode = 0;
               break;
             }
-
-            stringBond(strOut,pointOut[0],pointOut[1]);
-            for (int i = 0; i < 2; i++) {
-              for (int j = 0; j < 4; j++) {
-                print_binary_char(strOut[i * 4 + j]);
-                putchar(' ');
-              }
-              putchar('\n');
-            }
-            printf("\n");
-            for(int i = 0;i<8;i++){
-              serial.writeChar(strOut[i]);
-            }
-
+            serial.write(ringShift[0],ringShift[1]);
             *orbitCloud = *buf;
             start_flg = false;
             setTime_flg = true;
           }else{
-            //orbit.setCameraPosXYZ(robotPos[0],robotPos[1],robotPos[2]);//N_RING_X + 6.0,N_RING_Y,0.011);//4.565,2.460,0.14);
-    				//orbit.setCameraAngleXYZ(robotAngle[0],robotAngle[1],robotAngle[2]);//-1.0*M_PI/6.0
-            //orbit.clusteringContainer(filterCloud,campus);
-    				for(int i = 0;i < 10 ;i++){
-              robotPos[0] = 4.550;
-              robotPos[1] = 3.275-(0.1*i);
+            orbit.setCameraPosXYZ(robotCoord.cartesianX(),robotCoord.cartesianY(),robotCoord.cartesianZ());//4.565,2.460,0.14);
+    				orbit.setCameraAngleXYZ(coord.angleX(),coord.angleY(),coord.angleZ());//-1.0*M_PI/6.0
+            orbit.clusteringContainer(campus,campus);
+    				/*for(int i = 0;i < 10 ;i++){
+              robotCoord.cartesianX(4.550);
+              robotCoord.cartesianY(3.275-(0.1*i));
               float xyz_centroid_buf[3];
               xyz_centroid_buf[0] = -1.0*(i+1);
               xyz_centroid_buf[1] = 0.0+(0.1*i);
               xyz_centroid_buf[2] = pointY[i];
-              orbit.moveCloud(xyz_centroid_buf,robotPos[0]-4.550,robotPos[1]-3.275,robotPos[2]-robotPos[2]);
+              orbit.moveCloud(xyz_centroid_buf,robotCoord.cartesianX()-4.550,robotCoord.cartesianY()-3.275,robotCoord.cartesianZ()-robotCoord.cartesianZ());
     					orbit.addPoint(xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2]);//-1.0*z,x,y
               //printf("%f\n",3.275-(0.1*i) - 0.0+(0.1*i));
             }
-            oldRecordTime -= 2;
+            oldRecordTime -= 2;*/
           }
         }
+        orbit.coatView(campus);
         orbit.mergeCloud(campus,orbitCloud,campus);
         visualizer->updatePointCloud(campus, cloudName);
         //gettimeofday(&printTime, NULL);
@@ -669,167 +605,6 @@ private:
   	visualizer->close();
   }
 
-  void recViewer(){
-    Video video("src/iai_kinect2/kinect2_viewer/pcd/");
-    cv::Mat color, depth;
-    pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Rec Viewer"));
-    const string cloudName = "rendered";
-
-    lock.lock();
-    color = this->color;
-    depth = this->depth;
-    updateCloud = false;
-    lock.unlock();
-
-    createCloud(depth, color, cloud);
-
-    visualizer->addPointCloud(cloud, cloudName);
-    visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
-    visualizer->initCameraParameters();
-    visualizer->setBackgroundColor(0, 0, 0);
-    visualizer->setPosition(mode == REC ? color.cols : 0, 0);
-    visualizer->setSize(color.cols, color.rows);
-    visualizer->setShowFPS(true);
-    visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
-    visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
-
-    for(; running && ros::ok();)
-    {
-      if(updateCloud)
-      {
-        lock.lock();
-        color = this->color;
-        depth = this->depth;
-        updateCloud = false;
-        lock.unlock();
-
-        createCloud(depth, color, cloud);
-
-        visualizer->updatePointCloud(cloud, cloudName);
-      }
-      switch (key_i_flg) {
-        case 1:
-          video.recSetup();
-          key_i_flg = 2;
-          break;
-        case 2:
-          video.recCycle(cloud);
-          break;
-        case 3:
-          video.recEnd();
-          key_i_flg = 0;
-          break;
-      }
-      visualizer->spinOnce(10);
-    }
-    visualizer->close();
-  }
-
-  void playViewer(){
-    //Video video("src/iai_kinect2/kinect2_viewer/pcd/");
-    cv::Mat color, depth;
-    pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Play Viewer"));
-    const string cloudName = "rendered";
-
-    lock.lock();
-    color = this->color;
-    depth = this->depth;
-    updateCloud = false;
-    lock.unlock();
-
-    createCloud(depth, color, cloud);
-
-    visualizer->addPointCloud(cloud, cloudName);
-    visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
-    visualizer->initCameraParameters();
-    visualizer->setBackgroundColor(0, 0, 0);
-    visualizer->setPosition(mode == PLAY ? color.cols : 0, 0);
-    visualizer->setSize(color.cols, color.rows);
-    visualizer->setShowFPS(true);
-    visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
-    visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
-
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr playCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-    string filePos = "src/iai_kinect2/kinect2_viewer/pcd/2018.2.26_11:9:8/";
-    ifstream fin;
-    vector<string> fileName;
-    vector<float> pcdTime;
-
-    struct timeval recordTime;
-    time_t old_sec;
-    suseconds_t old_usec;
-    float timeNow;
-    int pcdCount = 0;
-
-    fin.open(filePos + "timeStamp.txt");
-    string str;
-
-    while(true){
-      fin >> str;
-      if (fin.fail()) break;
-      fileName.push_back(str);
-      //cout << std << endl;
-      fin >> str;
-      pcdTime.push_back(stod(str));
-      //cout << std << endl;
-    }
-
-    /*for(int i = 0;i<fileName.size();i++){
-      cout << fileName[i] << ":" << pcdTime[i] << endl;
-    }*/
-
-    for(; running && ros::ok();)
-    {
-      if(updateCloud)
-      {
-        lock.lock();
-        color = this->color;
-        depth = this->depth;
-        updateCloud = false;
-        lock.unlock();
-
-        createCloud(depth, color, cloud);
-        //---
-        gettimeofday(&recordTime, NULL);
-
-        switch (key_i_flg) {
-        case 1:
-          old_sec = recordTime.tv_sec;
-          old_usec = recordTime.tv_usec;
-          pcdCount = 0;
-          key_i_flg = 2;
-          break;
-        case 2:{
-          timeNow = (recordTime.tv_sec - old_sec) + (recordTime.tv_usec - old_usec)/1000.0/1000.0;
-          float diff = fabsf(pcdTime[pcdCount] - timeNow);
-          while(true){
-            if(pcdCount >= fileName.size() - 1)break;
-            else if(diff <= fabsf(pcdTime[pcdCount + 1] - timeNow))break;
-            else{
-              pcdCount++;
-              diff = fabsf(pcdTime[pcdCount] - timeNow);
-            }
-          }
-          cout << pcdCount << endl;
-          if (pcl::io::loadPCDFile (filePos + fileName[pcdCount], *playCloud) < 0)
-          {
-            cout << "Error loading model cloud." << endl;
-          }
-          if(pcdCount >= fileName.size() - 1)key_i_flg = 0;
-          break;}
-        default:
-          key_i_flg = 0;
-          break;
-        }
-
-        //---
-        visualizer->updatePointCloud(playCloud, cloudName);
-      }
-      visualizer->spinOnce(10);
-    }
-    visualizer->close();
-  }
-
   void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *)
   {
     if(event.keyUp())
@@ -841,11 +616,17 @@ private:
         running = false;
         break;
       case ' ':
-      case 's':
+      /*case 's':
         save = true;
-        break;
+        break;*/
       case 'i':
         key_i_flg++;
+        break;
+      case 'w':
+        CAMERA_ANGLE_Y++;
+        break;
+      case 's':
+        CAMERA_ANGLE_Y--;
         break;
       }
     }
@@ -1002,6 +783,8 @@ void help(const string &path)
 
 int main(int argc, char **argv)
 {
+  ros::init(argc,argv,"subscriber_node");
+
 #if EXTENDED_OUTPUT
   ROSCONSOLE_AUTOINIT;
   if(!getenv("ROSCONSOLE_FORMAT"))
@@ -1079,14 +862,6 @@ int main(int argc, char **argv)
     else if(param == "pcl")
     {
       mode = Receiver::PCL;
-    }
-    else if(param == "rec")
-    {
-      mode = Receiver::REC;
-    }
-    else if(param == "play")
-    {
-      mode = Receiver::PLAY;
     }
     else
     {

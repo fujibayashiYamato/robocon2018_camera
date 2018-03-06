@@ -400,7 +400,7 @@ void Orbit::clusteringContainer(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pc
 		k++;
 		}
 		Eigen::Vector4f xyz_centroid;
-	    	pcl::compute3DCentroid(*temCloud, xyz_centroid);//重心を計算
+	  pcl::compute3DCentroid(*temCloud, xyz_centroid);//重心を計算
 		//printf("%f:%f:%f\n",xyz_centroid[0],xyz_centroid[1],xyz_centroid[2]);
 
 		float dist = 0;
@@ -410,7 +410,6 @@ void Orbit::clusteringContainer(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pc
 			value += (temCloud->points[i].z - xyz_centroid[2])*(temCloud->points[i].z - xyz_centroid[2]);
 			if(dist < value)dist = value;
 		}
-
 		dist = pow(dist,0.5);
 		//printf("%f\n",dist);
 		if(dist >= DIST_VALUE -0.06  && dist <= DIST_VALUE + 0.06){
@@ -419,11 +418,11 @@ void Orbit::clusteringContainer(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pc
 				xyz_centroid_buf[i] = xyz_centroid[i];
 			}
 			rotationX(xyz_centroid_buf,M_PI/2.0);
-      rotationZ(xyz_centroid_buf,-M_PI/2.0);
+      rotationZ(xyz_centroid_buf,-1.0*M_PI/2.0);
       rotationY(xyz_centroid_buf,cameraAngle[1]);
       rotationZ(xyz_centroid_buf,cameraAngle[2]);
       moveCloud(xyz_centroid_buf,cameraPos[0]-initCameraPos[0],cameraPos[1]-initCameraPos[1],cameraPos[2]-initCameraPos[2]);
-			printf("y=%f\n",cameraPos[1]-initCameraPos[1]);
+			//printf("y=%f\n",cameraPos[1]-initCameraPos[1]);
 			addPoint(xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2]);//カメラの座標からロボットの座標に変換しながら保存する
 			addSphereCloud(temCloud,xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2],255,0,0);
 			mergeCloud(cloud_filtered,temCloud,cloud_filtered);
