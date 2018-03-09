@@ -230,20 +230,18 @@ void Orbit::cycle(){
 float Orbit::getPointY(){return avePointY;}
 float Orbit::getPointZ(float pointX){return coeA * pointX * pointX + coeB * pointX + coeC;}//ロボットの座標系
 
-
-
 void Orbit::addPointView(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud){
 	for(int i = 0;i < pointX.size();i++){
 		addSphereCloud(cloud,pointX[i],pointY[i],pointZ[i],255,0,0);
 	}
 	for(int i = 0;i < 100;i++){
-		addSphereCloud(cloud,float(-0.07 * i),getPointY(),getPointZ(float(-0.07 * i)),0,255,0);
+		addSphereCloud(cloud,float(5.0-0.07 * i),getPointY(),getPointZ(float(5.0-0.07 * i)),0,255,0);
 	}
 
-	rotationY(cloud,initCameraAngle[1]);
+	/*rotationY(cloud,initCameraAngle[1]);
 	rotationZ(cloud,initCameraAngle[2]);
 
-	moveCloud(cloud,initCameraPos[0],initCameraPos[1],initCameraPos[2]);
+	moveCloud(cloud,initCameraPos[0],initCameraPos[1],initCameraPos[2]);*/
 }
 
 bool Orbit::passCheckN(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,float* Z){
@@ -414,17 +412,23 @@ void Orbit::clusteringContainer(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pc
 		//printf("%f\n",dist);
 		if(dist >= DIST_VALUE -0.06  && dist <= DIST_VALUE + 0.06){
 			float xyz_centroid_buf[3];
-			for(int i = 0;i < 3;i++){
+			xyz_centroid_buf[0] = -1.0 * xyz_centroid[2];
+			xyz_centroid_buf[1] =  xyz_centroid[0];
+			xyz_centroid_buf[2] =  -1.0 * xyz_centroid[1];
+			/*for(int i = 0;i < 3;i++){
 				xyz_centroid_buf[i] = xyz_centroid[i];
-			}
-			rotationX(xyz_centroid_buf,M_PI/2.0);
-      rotationZ(xyz_centroid_buf,-1.0*M_PI/2.0);
+			}*/
+			/*rotationX(xyz_centroid_buf,M_PI/2.0);
+      rotationZ(xyz_centroid_buf,-1.0*M_PI/2.0);//-1.0*M_PI/2.0);
+			*/
       rotationY(xyz_centroid_buf,cameraAngle[1]);
       rotationZ(xyz_centroid_buf,cameraAngle[2]);
-      moveCloud(xyz_centroid_buf,cameraPos[0]-initCameraPos[0],cameraPos[1]-initCameraPos[1],cameraPos[2]-initCameraPos[2]);
+      //moveCloud(xyz_centroid_buf,cameraPos[0]-initCameraPos[0],cameraPos[1]-initCameraPos[1],cameraPos[2]-initCameraPos[2]);
+			moveCloud(xyz_centroid_buf,initCameraPos[0],initCameraPos[1],initCameraPos[2]);
 			//printf("y=%f\n",cameraPos[1]-initCameraPos[1]);
-			addPoint(xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2]);//カメラの座標からロボットの座標に変換しながら保存する
-			addSphereCloud(temCloud,xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2],255,0,0);
+			addPoint(xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2]);//発射点から見たシャトルコックの重心を保存
+			printf("x:%2.4f y:%2.4f z:%2.4f\n",xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2]);
+			addSphereCloud(temCloud,xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2],255,0,0);//重心の描写
 			mergeCloud(cloud_filtered,temCloud,cloud_filtered);
 		}
 		j++;

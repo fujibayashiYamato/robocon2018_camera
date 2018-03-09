@@ -1,123 +1,88 @@
 /**
-* Copyright 2014 University of Bremen, Institute for Artificial Intelligence
-* Author: Thiemo Wiedemeyer <wiedemeyer@cs.uni-bremen.de>
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright 2014 University of Bremen, Institute for Artificial Intelligence
+ * Author: Thiemo Wiedemeyer <wiedemeyer@cs.uni-bremen.de>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <cmath>
-#include <mutex>
-#include <thread>
-#include <chrono>
-#include <sys/time.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <time.h>
-#include <fstream>
-#include <string>
-#include <math.h>
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <iostream>
+ #include <sstream>
+ #include <string>
+ #include <vector>
+ #include <cmath>
+ #include <mutex>
+ #include <thread>
+ #include <chrono>
+ #include <sys/time.h>
+ #include <limits.h>
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ #include <time.h>
+ #include <fstream>
+ #include <string>
+ #include <math.h>
 
-#include "pcl.hpp"
+ #include <pcl/point_cloud.h>
+ #include <pcl/point_types.h>
+ #include <pcl/io/pcd_io.h>
+ #include <pcl/visualization/cloud_viewer.h>
+ #include <pcl_conversions/pcl_conversions.h>
+ #include <pcl/ros/conversions.h>
+ #include <pcl/sample_consensus/model_types.h>
+ #include <pcl/sample_consensus/method_types.h>
+ #include <pcl/segmentation/sac_segmentation.h>
+
+ #include <opencv2/opencv.hpp>
+
+ #include <ros/ros.h>
+ #include <ros/spinner.h>
+ #include <sensor_msgs/CameraInfo.h>
+ #include <sensor_msgs/Image.h>
+ #include <sensor_msgs/PointCloud2.h>
+
+ #include <cv_bridge/cv_bridge.h>
+
+ #include <image_transport/image_transport.h>
+ #include <image_transport/subscriber_filter.h>
+
+ #include <message_filters/subscriber.h>
+ #include <message_filters/synchronizer.h>
+ #include <message_filters/sync_policies/exact_time.h>
+ #include <message_filters/sync_policies/approximate_time.h>
+
+ #include <ros/ros.h>
+ #include <ros/spinner.h>
+ #include <sensor_msgs/CameraInfo.h>
+ #include <sensor_msgs/Image.h>
+
+ #include <cv_bridge/cv_bridge.h>
+
+ #include <image_transport/image_transport.h>
+ #include <image_transport/subscriber_filter.h>
+
+ #include <message_filters/subscriber.h>
+ #include <message_filters/synchronizer.h>
+ #include <message_filters/sync_policies/exact_time.h>
+ #include <message_filters/sync_policies/approximate_time.h>
+
+ #include <kinect2_bridge/kinect2_definitions.h>
+
+#include "pcl_util.hpp"
+#include "orbit.hpp"
 #include "serial.hpp"
 #include "util.hpp"
-
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl/visualization/cloud_viewer.h>
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/ros/conversions.h>
-#include <pcl/sample_consensus/model_types.h>
-#include <pcl/sample_consensus/method_types.h>
-#include <pcl/segmentation/sac_segmentation.h>
-
-#include <opencv2/opencv.hpp>
-
-#include <ros/ros.h>
-#include <ros/spinner.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/PointCloud2.h>
-
-#include <cv_bridge/cv_bridge.h>
-
-#include <image_transport/image_transport.h>
-#include <image_transport/subscriber_filter.h>
-
-#include <message_filters/subscriber.h>
-#include <message_filters/synchronizer.h>
-#include <message_filters/sync_policies/exact_time.h>
-#include <message_filters/sync_policies/approximate_time.h>
-
-#include <ros/ros.h>
-#include <ros/spinner.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <sensor_msgs/Image.h>
-
-#include <cv_bridge/cv_bridge.h>
-
-#include <image_transport/image_transport.h>
-#include <image_transport/subscriber_filter.h>
-
-#include <message_filters/subscriber.h>
-#include <message_filters/synchronizer.h>
-#include <message_filters/sync_policies/exact_time.h>
-#include <message_filters/sync_policies/approximate_time.h>
-
-#include <kinect2_bridge/kinect2_definitions.h>
-
-using namespace std;
-
-typedef union{
-   float f;
-   unsigned char c4[4];
-}FloatChar4;
-
-float uc4tof(unsigned char *value){
-    FloatChar4 buf;
-    for(int i = 0; i < 4; i++)buf.c4[i] = value[i];
-    return buf.f;
-}
-
-void ftouc4(unsigned char *value, float f){
-    FloatChar4 buf;
-    buf.f = f;
-    for(int i = 0; i < 4; i++)value[i] = buf.c4[i];
-}
-
-void print_binary_char(char n)
-{
-    for (char i = CHAR_BIT-1; i >= 0; i--) {
-        putchar(n & 1 << i ? '1' : '0');
-    }
-    //putchar('\n');
-}
-
-void stringBond(char *str,char *bond0,char *bond1){
-  for(int i = 0;i < 4;i++){
-    str[i] = bond0[i];
-  }
-  for(int i = 0;i < 4;i++){
-    str[4+i] = bond1[i];
-  }
-}
 
 class Receiver
 {
@@ -131,9 +96,9 @@ public:
   };
 
 private:
-  mutex lock;
+  std::mutex lock;
 
-  const string topicColor, topicDepth;
+  const std::string topicColor, topicDepth;
   const bool useExact, useCompressed;
 
   bool updateImage, updateCloud;
@@ -158,16 +123,16 @@ private:
   message_filters::Synchronizer<ExactSyncPolicy> *syncExact;
   message_filters::Synchronizer<ApproximateSyncPolicy> *syncApproximate;
 
-  thread imageViewerThread;
+  std::thread imageViewerThread;
   Mode mode;
 
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud;
   pcl::PCDWriter writer;
-  ostringstream oss;
-  vector<int> params;
+  std::ostringstream oss;
+  std::vector<int> params;
 
 public:
-  Receiver(const string &topicColor, const string &topicDepth, const bool useExact, const bool useCompressed)
+  Receiver(const std::string &topicColor, const std::string &topicDepth, const bool useExact, const bool useCompressed)
     : topicColor(topicColor), topicDepth(topicDepth), useExact(useExact), useCompressed(useCompressed),
       updateImage(false), updateCloud(false), save(false), running(false), frame(0), queueSize(5),
       nh("~"), spinner(0), it(nh), mode(CLOUD)
@@ -199,8 +164,8 @@ private:
     this->mode = mode;
     running = true;
 
-    string topicCameraInfoColor = topicColor.substr(0, topicColor.rfind('/')) + "/camera_info";
-    string topicCameraInfoDepth = topicDepth.substr(0, topicDepth.rfind('/')) + "/camera_info";
+    std::string topicCameraInfoColor = topicColor.substr(0, topicColor.rfind('/')) + "/camera_info";
+    std::string topicCameraInfoDepth = topicDepth.substr(0, topicDepth.rfind('/')) + "/camera_info";
 
     image_transport::TransportHints hints(useCompressed ? "compressed" : "raw");
     subImageColor = new image_transport::SubscriberFilter(it, topicColor, queueSize, hints);
@@ -221,14 +186,14 @@ private:
 
     spinner.start();
 
-    chrono::milliseconds duration(1);
+    std::chrono::milliseconds duration(1);
     while(!updateImage || !updateCloud)
     {
       if(!ros::ok())
       {
         return;
       }
-      this_thread::sleep_for(duration);
+      std::this_thread::sleep_for(duration);
     }
     cloud = pcl::PointCloud<pcl::PointXYZRGBA>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBA>());
     cloud->height = color.rows;
@@ -239,16 +204,6 @@ private:
 
     switch(mode)
     {
-    case CLOUD:
-      cloudViewer();
-      break;
-    case IMAGE:
-      imageViewer();
-      break;
-    case BOTH:
-      imageViewerThread = thread(&Receiver::imageViewer, this);
-      cloudViewer();
-      break;
     case PCL:
       pclViewer();
       break;
@@ -306,83 +261,14 @@ private:
     lock.unlock();
   }
 
-  void imageViewer()
-  {
-    cv::Mat color, depth, depthDisp, combined;
-    chrono::time_point<chrono::high_resolution_clock> start, now;
-    double fps = 0;
-    size_t frameCount = 0;
-    ostringstream oss;
-    const cv::Point pos(5, 15);
-    const cv::Scalar colorText = CV_RGB(255, 255, 255);
-    const double sizeText = 0.5;
-    const int lineText = 1;
-    const int font = cv::FONT_HERSHEY_SIMPLEX;
+  //float angle[3] = {10.0,0.0,0.0};
+  //#define DEBUG
 
-    cv::namedWindow("Image Viewer");
-    oss << "starting...";
-
-    start = chrono::high_resolution_clock::now();
-    for(; running && ros::ok();)
-    {
-      if(updateImage)
-      {
-        lock.lock();
-        color = this->color;
-        depth = this->depth;
-        updateImage = false;
-        lock.unlock();
-
-        ++frameCount;
-        now = chrono::high_resolution_clock::now();
-        double elapsed = chrono::duration_cast<chrono::milliseconds>(now - start).count() / 1000.0;
-        if(elapsed >= 1.0)
-        {
-          fps = frameCount / elapsed;
-          oss.str("");
-          oss << "fps: " << fps << " ( " << elapsed / frameCount * 1000.0 << " ms)";
-          start = now;
-          frameCount = 0;
-        }
-
-        dispDepth(depth, depthDisp, 12000.0f);
-        combine(color, depthDisp, combined);
-        //combined = color;
-
-        cv::putText(combined, oss.str(), pos, font, sizeText, colorText, lineText, CV_AA);
-        cv::imshow("Image Viewer", combined);
-      }
-
-      int key = cv::waitKey(1);
-      switch(key & 0xFF)
-      {
-      case 27:
-      case 'q':
-        running = false;
-        break;
-      case ' ':
-      case 's':
-        if(mode == IMAGE)
-        {
-          createCloud(depth, color, cloud);
-          saveCloudAndImages(cloud, color, depth, depthDisp);
-        }
-        else
-        {
-          save = true;
-        }
-        break;
-      }
-    }
-    cv::destroyAllWindows();
-    cv::waitKey(100);
-  }
-
-  void cloudViewer()
+  void pclViewer()
   {
     cv::Mat color, depth;
     pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Cloud Viewer"));
-    const string cloudName = "rendered";
+    const std::string cloudName = "rendered";
 
     lock.lock();
     color = this->color;
@@ -396,11 +282,38 @@ private:
     visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
     visualizer->initCameraParameters();
     visualizer->setBackgroundColor(0, 0, 0);
-    visualizer->setPosition(mode == BOTH ? color.cols : 0, 0);
+    visualizer->setPosition(mode == PCL ? color.cols : 0, 0);
     visualizer->setSize(color.cols, color.rows);
     visualizer->setShowFPS(true);
-    visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
+    visualizer->setCameraPosition(0,0,0,0,-1,0);
     visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
+
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr filterCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr pointViewCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    Orbit orbit;
+    RosSerial serial;
+
+    bool start_flg = false;
+    bool setup_flg = true;
+    bool debug_flg = false;
+    int ringMode = 0;
+
+    struct timeval recTime;
+    time_t old_sec = 0;
+    suseconds_t old_usec = 0;
+
+    Coord<float,float> robotPos;
+
+    float xyz_centroid_buf[8][3] = {
+      {-2.59120,-0.04350,2.39335},
+      {-2.92735,-0.04878,2.49008},
+      {-3.27120,-0.06753,2.56061},
+      {-3.57458,-0.06975,2.55976},
+      {-3.90198,-0.06814,2.54958},
+      {-4.21703,-0.07187,2.49546},
+      {-4.49903,-0.07859,2.38862},
+      {-4.80053,-0.07273,2.29812}
+    };
 
     for(; running && ros::ok();)
     {
@@ -412,9 +325,96 @@ private:
         updateCloud = false;
         lock.unlock();
 
+        pcl::PointCloud<pcl::PointXYZRGBA>::Ptr shuttleDiscoveryCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+        pcl::PointCloud<pcl::PointXYZRGBA>::Ptr buf(new pcl::PointCloud<pcl::PointXYZRGBA>);
+
         createCloud(depth, color, cloud);
 
-        visualizer->updatePointCloud(cloud, cloudName);
+        //--------------------------------------------------
+        gettimeofday(&recTime, NULL);
+
+        //ロボットの座標の取得を検知
+        if(serial.dataAvailable()){
+          serial.getPos(robotPos);
+          start_flg = true;
+        }
+
+        //受信した時一回だけ行われる
+        if(start_flg && setup_flg){
+          setup_flg = false;
+          old_sec = recTime.tv_sec;
+          old_usec = recTime.tv_usec;
+          orbit.setup();
+          orbit.setInitRobotXYZ(robotPos);
+          //printf("setup\n");
+        }
+
+        orbit.filter(cloud,filterCloud);
+        orbit.coordConversion(filterCloud);
+
+        if(start_flg){
+          if((recTime.tv_sec - old_sec) + (recTime.tv_usec - old_usec)/1000.0/1000.0 >= 2.0 || debug_flg){
+            orbit.coeCreate();
+            orbit.addPointView(buf);
+            float shuttlePoint[2] = {0.0};
+            switch (ringMode) {
+            case 0://TZ1
+            case 1://TZ2
+              ringMode++;
+              if(orbit.passCheckN(buf,&shuttlePoint[0],&shuttlePoint[1])){
+                printf("GOAL\n");
+                serial.write(0.0,0.0);
+              }else{
+                printf("Y:%3.5f Z::%3.5f\n",shuttlePoint[0],shuttlePoint[1]);
+                serial.write(shuttlePoint[0],shuttlePoint[1]);
+              }
+              break;
+            case 2://TZ3
+              ringMode = 0;
+              break;
+            }
+            *pointViewCloud = *buf;
+            start_flg = false;
+            setup_flg = true;
+            debug_flg = false;
+          }else{
+            orbit.setRobotXYZ(robotPos);
+
+#ifdef DEBUG
+          for(int i = 0; i< 8;i++){
+            orbit.addShuttlePoint(xyz_centroid_buf[i][0],xyz_centroid_buf[i][1],xyz_centroid_buf[i][2]);
+          }
+          debug_flg = true;
+#else
+          orbit.shuttleDiscovery(filterCloud,shuttleDiscoveryCloud);
+#endif
+
+          }
+        }
+        //--------------------------------------------------
+        pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
+        mergeCloud(campus,cloud,campus);
+
+        rotationX(campus,M_PI_2);
+        rotationZ(campus,-1.0 * M_PI_2);
+        rotationY(campus,CAMERA_ANGLE_Y * M_PI/180.0);
+        moveCloud(campus,CAMERA_SETUP_POS_X,CAMERA_SETUP_POS_Y,CAMERA_SETUP_POS_Z);
+        rotationZ(campus,-1.0 * robotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
+        moveCloud(campus,robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
+
+        mergeCloud(campus,shuttleDiscoveryCloud,campus);
+        mergeCloud(campus,pointViewCloud,campus);
+
+        coatView(campus);
+        visualizer->updatePointCloud(campus, cloudName);//*/
+
+        /*//orbit.filter(cloud,filterCloud);
+        passThroughContainer(cloud,filterCloud);
+        //orbit.shuttleDiscovery(filterCloud,shuttleDiscoveryCloud);
+        //pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
+        //mergeCloud(filterCloud,shuttleDiscoveryCloud,campus);
+        visualizer->updatePointCloud(filterCloud, cloudName);*/
+
       }
       if(save)
       {
@@ -428,183 +428,6 @@ private:
     visualizer->close();
   }
 
-  int orbitFlg = 0;
-  int key_i_flg = 0;
-  //#define CAMERA_ANGLE_Y 0.0//-22.5//degry
-  int CAMERA_ANGLE_Y = 0.0;
-
-  void pclViewer(){
-    Orbit orbit;
-    RosSerial serial;
-
-  	cv::Mat color, depth;
-  	pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("PCL Viewer"));
-  	const string cloudName = "rendered";
-  	lock.lock();
-  	color = this->color;
-  	depth = this->depth;
-  	updateCloud = false;
-  	lock.unlock();
-
-  	createCloud(depth, color, cloud);
-
-  	visualizer->addPointCloud(cloud, cloudName);
-  	visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
-  	visualizer->initCameraParameters();
-  	visualizer->setBackgroundColor(0, 0, 0);
-  	visualizer->setPosition(mode == PCL ? color.cols : 0, 0);
-  	visualizer->setSize(color.cols, color.rows);
-  	visualizer->setShowFPS(true);
-  	visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
-  	visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
-
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr oldCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr octreeCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr statisticalOutlierCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr planeCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr clusteringCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr radiusOutlierCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr modelDetectionCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr filterCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr orbitCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-
-  	*oldCloud = *cloud;
-
-    bool start_flg = false;
-    bool setTime_flg = true;
-    int ringMode = 0;
-    Coord<float,float> coord;
-    Coord<float,float> robotCoord;
-
-    float ringShift[2] = {0.0};
-    float pointY[10] = {1.05,1.8,2.25,2.4,2.25,1.8,1.05,0.0,-1.35,-3.0};
-
-    struct timeval printTime;
-    struct timeval recordTime;
-    suseconds_t oldTime = 0;
-    suseconds_t oldRecordTime = 0;
-
-    long int count = 0;
-
-  	for(; running && ros::ok();)
-  	{
-  		if(updateCloud)
-  		{
-        lock.lock();
-  			color = this->color;
-  			depth = this->depth;
-  			updateCloud = false;
-  			lock.unlock();
-  			createCloud(depth, color, cloud);
-
-        gettimeofday(&recordTime, NULL);
-        gettimeofday(&printTime, NULL);
-
-        //serial
-        if(serial.dataAvailable()){
-          //printf("%d:\n",count);
-          count++;
-          serial.getPos(coord);
-          //printf("%f:%f:%f\n", coord.cartesianX(),coord.cartesianY(),coord.angleZ());
-          robotCoord.cartesian(coord.cartesianX(),coord.cartesianY(),0.011);
-          robotCoord.angle(0.0,CAMERA_ANGLE_Y/180.0*M_PI,coord.angleZ());
-          start_flg = true;
-        }else if(key_i_flg == 1){
-          key_i_flg = 0;
-          robotCoord.cartesian(5.515,3.275,0.011);
-          robotCoord.angle(0.0,CAMERA_ANGLE_Y/180.0*M_PI,0.0);
-          start_flg = true;
-        }
-        if(start_flg && setTime_flg){
-          setTime_flg = false;
-          oldRecordTime = recordTime.tv_sec;
-          orbit.setInitCameraPosXYZ(robotCoord.cartesianX(),robotCoord.cartesianY(),robotCoord.cartesianZ());
-          orbit.setInitCameraAngleXYZ(coord.angleX(),coord.angleY(),coord.angleZ());
-          //orbit.setInitCameraPosXYZ(4.550,3.275,robotCoord.cartesianZ());
-          //orbit.setInitCameraAngleXYZ(0.0,0.0,0.0);
-          //orbit.setCameraPosXYZ(robotCoord.cartesianX(),robotCoord.cartesianY(),robotCoord.cartesianZ());//4.565,2.460,0.14);
-          //orbit.setCameraAngleXYZ(coord.angleX(),coord.angleY(),coord.angleZ());//-1.0*M_PI/6.0
-        }
-        orbit.filter(cloud,campus);
-        orbit.rotationX(campus,M_PI/2.0);
-        orbit.rotationZ(campus,-M_PI/2.0);
-        orbit.rotationY(campus,robotCoord.angleY());
-        orbit.rotationZ(campus,robotCoord.angleZ());
-        orbit.moveCloud(campus,robotCoord.cartesianX(),robotCoord.cartesianY(),robotCoord.cartesianZ());
-
-  			//-----------------------------------------
-        if(start_flg){
-          if(recordTime.tv_sec - oldRecordTime >= 2){
-            pcl::PointCloud<pcl::PointXYZRGBA>::Ptr buf(new pcl::PointCloud<pcl::PointXYZRGBA>);
-            orbit.cycle();
-            orbit.addPointView(buf);
-            //orbit.coatView(buf);
-            switch (ringMode) {
-            case 0://TZ1
-            case 1://TZ2
-              if(orbit.passCheckN(buf,&ringShift[0],&ringShift[1])){
-                printf("GOAL\n\n");
-                ringShift[0] = 0.0;
-                ringShift[1] = 0.0;
-                ringMode++;
-              }else{
-                printf("Y:%f Z:%f\n",ringShift[0],ringShift[1]);
-              }
-              break;
-            case 2://TZ3
-              ringMode = 0;
-              break;
-            }
-            serial.write(ringShift[0],ringShift[1]);
-            *orbitCloud = *buf;
-            start_flg = false;
-            setTime_flg = true;
-          }else{
-            orbit.setCameraPosXYZ(robotCoord.cartesianX(),robotCoord.cartesianY(),robotCoord.cartesianZ());//4.565,2.460,0.14);
-    				orbit.setCameraAngleXYZ(coord.angleX(),coord.angleY(),coord.angleZ());//-1.0*M_PI/6.0
-            orbit.clusteringContainer(campus,campus);
-    				/*for(int i = 0;i < 10 ;i++){
-              robotCoord.cartesianX(4.550);
-              robotCoord.cartesianY(3.275-(0.1*i));
-              float xyz_centroid_buf[3];
-              xyz_centroid_buf[0] = -1.0*(i+1);
-              xyz_centroid_buf[1] = 0.0+(0.1*i);
-              xyz_centroid_buf[2] = pointY[i];
-              orbit.moveCloud(xyz_centroid_buf,robotCoord.cartesianX()-4.550,robotCoord.cartesianY()-3.275,robotCoord.cartesianZ()-robotCoord.cartesianZ());
-    					orbit.addPoint(xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2]);//-1.0*z,x,y
-              //printf("%f\n",3.275-(0.1*i) - 0.0+(0.1*i));
-            }
-            oldRecordTime -= 2;*/
-          }
-        }
-        orbit.coatView(campus);
-        orbit.mergeCloud(campus,orbitCloud,campus);
-        visualizer->updatePointCloud(campus, cloudName);
-        //gettimeofday(&printTime, NULL);
-        //printf("%d\n",printTime.tv_usec - oldTime);
-        /*if(printTime.tv_sec - oldTime >= 1){
-          oldTime = printTime.tv_sec;
-          printf("pos = x:%f y:%f z:%f\n\r", robotPos[0],robotPos[1],robotPos[2]);
-          printf("angle = x:%f y:%f z:%f\n\r", robotAngle[0],robotAngle[1],robotAngle[2]);
-          printf("\n");
-        }*/
-  			//-----------------------------------------
-
-  		}
-  		if(save)
-  		{
-  			save = false;
-  			cv::Mat depthDisp;
-  			dispDepth(depth, depthDisp, 12000.0f);
-  			saveCloudAndImages(cloud, color, depth, depthDisp);
-  		}
-  		visualizer->spinOnce(10);
-  	}
-  	visualizer->close();
-  }
-
   void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *)
   {
     if(event.keyUp())
@@ -615,19 +438,28 @@ private:
       case 'q':
         running = false;
         break;
-      case ' ':
-      /*case 's':
+      /*case ' ':
+      case 's':
         save = true;
         break;*/
-      case 'i':
-        key_i_flg++;
+      /*case 'a':
+        angle[0] += M_PI_4;
         break;
-      case 'w':
-        CAMERA_ANGLE_Y++;
+      case 'z':
+        angle[0] -= M_PI_4;
         break;
       case 's':
-        CAMERA_ANGLE_Y--;
+        angle[1] += M_PI_4;
         break;
+      case 'x':
+        angle[1] -= M_PI_4;
+        break;
+      case 'd':
+        angle[2] += M_PI_4;
+        break;
+      case 'v':
+        angle[2] -= M_PI_4;
+        break;*/
       }
     }
   }
@@ -661,7 +493,7 @@ private:
 
       for(int c = 0; c < in.cols; ++c, ++itI, ++itO)
       {
-        *itO = (uint8_t)min((*itI * maxInt / maxValue), 255.0f);
+        *itO = (uint8_t)std::min((*itI * maxInt / maxValue), 255.0f);
       }
     }
 
@@ -691,7 +523,7 @@ private:
 
   void createCloud(const cv::Mat &depth, const cv::Mat &color, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &cloud) const
   {
-    const float badPoint = numeric_limits<float>::quiet_NaN();
+    const float badPoint = std::numeric_limits<float>::quiet_NaN();
 
     #pragma omp parallel for
     for(int r = 0; r < depth.rows; ++r)
@@ -727,12 +559,12 @@ private:
   void saveCloudAndImages(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr cloud, const cv::Mat &color, const cv::Mat &depth, const cv::Mat &depthColored)
   {
     oss.str("");
-    oss << "./" << setfill('0') << setw(4) << frame;
-    const string baseName = oss.str();
-    const string cloudName = baseName + "_cloud.pcd";
-    const string colorName = baseName + "_color.jpg";
-    const string depthName = baseName + "_depth.png";
-    const string depthColoredName = baseName + "_depth_colored.png";
+    oss << "./" << std::setfill('0') << std::setw(4) << frame;
+    const std::string baseName = oss.str();
+    const std::string cloudName = baseName + "_cloud.pcd";
+    const std::string colorName = baseName + "_color.jpg";
+    const std::string depthName = baseName + "_depth.png";
+    const std::string depthColoredName = baseName + "_depth_colored.png";
 
     OUT_INFO("saving cloud: " << cloudName);
     writer.writeBinary(cloudName, *cloud);
@@ -770,15 +602,15 @@ private:
   }
 };
 
-void help(const string &path)
+void help(const std::string &path)
 {
-  cout << path << FG_BLUE " [options]" << endl
-            << FG_GREEN "  name" NO_COLOR ": " FG_YELLOW "'any string'" NO_COLOR " equals to the kinect2_bridge topic base name" << endl
-            << FG_GREEN "  mode" NO_COLOR ": " FG_YELLOW "'qhd'" NO_COLOR ", " FG_YELLOW "'hd'" NO_COLOR ", " FG_YELLOW "'sd'" NO_COLOR " or " FG_YELLOW "'ir'" << endl
-            << FG_GREEN "  visualization" NO_COLOR ": " FG_YELLOW "'image'" NO_COLOR ", " FG_YELLOW "'cloud'" NO_COLOR " or " FG_YELLOW "'both'" << endl
-            << FG_GREEN "  options" NO_COLOR ":" << endl
-            << FG_YELLOW "    'compressed'" NO_COLOR " use compressed instead of raw topics" << endl
-            << FG_YELLOW "    'approx'" NO_COLOR " use approximate time synchronization" << endl;
+  std::cout << path << FG_BLUE " [options]" << std::endl
+            << FG_GREEN "  name" NO_COLOR ": " FG_YELLOW "'any string'" NO_COLOR " equals to the kinect2_bridge topic base name" << std::endl
+            << FG_GREEN "  mode" NO_COLOR ": " FG_YELLOW "'qhd'" NO_COLOR ", " FG_YELLOW "'hd'" NO_COLOR ", " FG_YELLOW "'sd'" NO_COLOR " or " FG_YELLOW "'ir'" << std::endl
+            << FG_GREEN "  visualization" NO_COLOR ": " FG_YELLOW "'image'" NO_COLOR ", " FG_YELLOW "'cloud'" NO_COLOR " or " FG_YELLOW "'both'" << std::endl
+            << FG_GREEN "  options" NO_COLOR ":" << std::endl
+            << FG_YELLOW "    'compressed'" NO_COLOR " use compressed instead of raw topics" << std::endl
+            << FG_YELLOW "    'approx'" NO_COLOR " use approximate time synchronization" << std::endl;
 }
 
 int main(int argc, char **argv)
@@ -801,16 +633,16 @@ int main(int argc, char **argv)
     return 0;
   }
 
-  string ns = K2_DEFAULT_NS;
-  string topicColor = K2_TOPIC_QHD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
-  string topicDepth = K2_TOPIC_QHD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
+  std::string ns = K2_DEFAULT_NS;
+  std::string topicColor = K2_TOPIC_QHD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
+  std::string topicDepth = K2_TOPIC_QHD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
   bool useExact = true;
   bool useCompressed = false;
   Receiver::Mode mode = Receiver::CLOUD;
 
   for(size_t i = 1; i < (size_t)argc; ++i)
   {
-    string param(argv[i]);
+    std::string param(argv[i]);
 
     if(param == "-h" || param == "--help" || param == "-?" || param == "--?")
     {
@@ -846,18 +678,6 @@ int main(int argc, char **argv)
     else if(param == "compressed")
     {
       useCompressed = true;
-    }
-    else if(param == "image")
-    {
-      mode = Receiver::IMAGE;
-    }
-    else if(param == "cloud")
-    {
-      mode = Receiver::CLOUD;
-    }
-    else if(param == "both")
-    {
-      mode = Receiver::BOTH;
     }
     else if(param == "pcl")
     {
