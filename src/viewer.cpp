@@ -392,6 +392,25 @@ private:
 
           #ifdef DEBUG_DATA_ON
             for(int i = 0; i< 8;i++){
+              /*
+              printf("robotPosCartesian:%3.5f %3.5f %3.5f\n",robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
+              printf("robotPosAngle    :%3.5f %3.5f %3.5f\n",robotPos.angleX(),robotPos.angleY(),robotPos.angleZ());
+              robotPos.cartesianY(robotPos.cartesianY() - 0.1);
+              robotPos.angleZ(robotPos.angleZ() + 0.1);
+              printf("robotPosCartesian:%3.5f %3.5f %3.5f\n",robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
+              printf("robotPosAngle    :%3.5f %3.5f %3.5f\n",robotPos.angleX(),robotPos.angleY(),robotPos.angleZ());
+              float value[3];
+              for(int j = 0;j<3;j++){value[j] = xyz_centroid_buf[i][j];}
+              value[1] += 0.1 * (i+1);
+              rotationZ(value,0.1 * (i+1));
+              printf("xyz_centroid_buf :%3.5f %3.5f %3.5f\n",xyz_centroid_buf[i][0],xyz_centroid_buf[i][1],xyz_centroid_buf[i][2]);
+              printf("value            :%3.5f %3.5f %3.5f\n",value[0],value[1],value[2]);
+              orbit.setRobotXYZ(robotPos);
+              orbit.shiftCorrection(value);
+
+              printf("value            :%3.5f %3.5f %3.5f\n\n",value[0],value[1],value[2]);
+              orbit.addShuttlePoint(value[0],value[1],value[2]);
+              //*/
               orbit.addShuttlePoint(xyz_centroid_buf[i][0],xyz_centroid_buf[i][1],xyz_centroid_buf[i][2]);
             }
             debug_flg = true;
@@ -442,6 +461,7 @@ private:
         visualizer->spinOnce(10);
       #endif
     }
+    ros::spinOnce;
     #ifdef DATA_VIEW_ON
       visualizer->close();
     #endif

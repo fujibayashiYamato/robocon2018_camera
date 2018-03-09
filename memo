@@ -1,5 +1,6 @@
 データの保存
-rosbag record /kinect2/sd/image_color_rect /kinect2/sd/image_depth_rect /kinect2/sd/camera_info
+rosbag record -a
+rosbag record /kinect2/sd/image_color_rect /kinect2/sd/image_depth_rect /kinect2/sd/camera_info /chatter
 
 データの再生
 rosbag play bagfiles/2018-02-26-15-47-55.bag

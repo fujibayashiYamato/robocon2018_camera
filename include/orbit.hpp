@@ -80,6 +80,7 @@ public:
 	bool passCheckG();
   void setRobotXYZ(Coord<float,float> &coord);
 	void setInitRobotXYZ(Coord<float,float> &coord);
+	void shiftCorrection(float* value);
 	void shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
   void shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered);
 private:
@@ -123,7 +124,7 @@ void Orbit::addPointView(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 		addSphereCloud(cloud,float(-0.07 * i),getPointY(),getPointZ(float(-0.07 * i)),0,255,0);
 	}
 
-  rotationZ(cloud,-1.0 * robotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
+  rotationZ(cloud,-1.0 * initRobotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
   moveCloud(cloud,initRobotPos.cartesianX(),initRobotPos.cartesianY(),initRobotPos.cartesianZ());
   //printf("%3.5f:%3.5f:%3.5f\n",initRobotPos.cartesianX(),initRobotPos.cartesianY(),initRobotPos.cartesianZ());
 }
@@ -234,6 +235,12 @@ bool Orbit::passCheckG()
 void Orbit::setRobotXYZ(Coord<float,float> &coord){this->robotPos = coord;}
 void Orbit::setInitRobotXYZ(Coord<float,float> &coord){this->initRobotPos = coord;}
 
+void Orbit::shiftCorrection(float* value)
+{
+	rotationZ(value,(-1.0 * robotPos.angleZ()) - (-1.0 * initRobotPos.angleZ()));
+	moveCloud(value,robotPos.cartesianX()-initRobotPos.cartesianX(),robotPos.cartesianY()-initRobotPos.cartesianY(),robotPos.cartesianZ()-initRobotPos.cartesianZ());
+}
+
 void Orbit::shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 {
 	pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGBA>);
@@ -282,8 +289,10 @@ void Orbit::shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 			float xyz_centroid_buf[3];
 			for(int i = 0;i<3;i++){xyz_centroid_buf[i] = xyz_centroid[i];}
 
-      rotationZ(xyz_centroid_buf,(-1.0 * robotPos.angleZ()) - (-1.0 * initRobotPos.angleZ()));
-			moveCloud(xyz_centroid_buf,robotPos.cartesianX()-initRobotPos.cartesianX(),robotPos.cartesianY()-initRobotPos.cartesianY(),robotPos.cartesianZ()-initRobotPos.cartesianZ());
+			//ズレ補正
+			shiftCorrection(xyz_centroid_buf);
+      //rotationZ(xyz_centroid_buf,(-1.0 * robotPos.angleZ()) - (-1.0 * initRobotPos.angleZ()));
+			//moveCloud(xyz_centroid_buf,robotPos.cartesianX()-initRobotPos.cartesianX(),robotPos.cartesianY()-initRobotPos.cartesianY(),robotPos.cartesianZ()-initRobotPos.cartesianZ());
 
       //行ったこと:座標系をロボットに合わる、カメラのy軸の回転を補正、ロボットが回転することによるズレを補正、ロボットが移動することによるズレを補正
       //行っていないこと:カメラのz軸の回転を補正、カメラの原点をロボットの位置に移動
@@ -341,8 +350,10 @@ void Orbit::shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::
 			float xyz_centroid_buf[3];
 			for(int i = 0;i<3;i++){xyz_centroid_buf[i] = xyz_centroid[i];}
 
-      rotationZ(xyz_centroid_buf,(-1.0 * robotPos.angleZ()) - (-1.0 * initRobotPos.angleZ()));
-			moveCloud(xyz_centroid_buf,robotPos.cartesianX()-initRobotPos.cartesianX(),robotPos.cartesianY()-initRobotPos.cartesianY(),robotPos.cartesianZ()-initRobotPos.cartesianZ());
+			//ズレ補正
+			shiftCorrection(xyz_centroid_buf);
+      //rotationZ(xyz_centroid_buf,(-1.0 * robotPos.angleZ()) - (-1.0 * initRobotPos.angleZ()));
+			//moveCloud(xyz_centroid_buf,robotPos.cartesianX()-initRobotPos.cartesianX(),robotPos.cartesianY()-initRobotPos.cartesianY(),robotPos.cartesianZ()-initRobotPos.cartesianZ());
 
       //行ったこと:座標系をロボットに合わる、カメラのy軸の回転を補正、ロボットが回転することによるズレを補正、ロボットが移動することによるズレを補正
       //行っていないこと:カメラのz軸の回転を補正、カメラの原点をロボットの位置に移動

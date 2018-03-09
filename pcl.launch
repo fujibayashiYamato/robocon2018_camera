@@ -5,4 +5,5 @@
       <param name="port" value="/dev/ttyUSB0"/>
       <param name="baud" value="115200"/>
     </node>
+    <node pkg="rosserial_test" type="rosserial_test" name="rosserial_test"/>
 </launch>
