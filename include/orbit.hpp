@@ -80,6 +80,7 @@ public:
 	bool passCheckG();
   void setRobotXYZ(Coord<float,float> &coord);
 	void setInitRobotXYZ(Coord<float,float> &coord);
+	void shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
   void shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered);
 private:
   Coord<float,float> initRobotPos;//射出時のロボットの位置
@@ -233,6 +234,65 @@ bool Orbit::passCheckG()
 void Orbit::setRobotXYZ(Coord<float,float> &coord){this->robotPos = coord;}
 void Orbit::setInitRobotXYZ(Coord<float,float> &coord){this->initRobotPos = coord;}
 
+void Orbit::shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
+{
+	pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGBA>);
+	tree->setInputCloud(cloud);
+	std::vector<pcl::PointIndices> cluster_indices;
+	pcl::EuclideanClusterExtraction<pcl::PointXYZRGBA> ec;
+	ec.setClusterTolerance(0.1);//塊の認識の隙間の許容？単位m0.09
+	ec.setMinClusterSize(CLUSTERING_NUM-30);//最小個数-45
+	ec.setMaxClusterSize(CLUSTERING_NUM+30);//最大個数
+	ec.setSearchMethod(tree);//クラスタリングの手法
+	ec.setInputCloud(cloud);//点群入力
+	ec.extract(cluster_indices);//クラスター情報を引数に出力
+	/**ここまででクラスタリングは終了している**/
+
+	for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+	{
+		int k = 0;
+		pcl::PointCloud<pcl::PointXYZRGBA>::Ptr temCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+		for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); pit++) {
+			temCloud->points.resize (k+1);
+			temCloud->points[k].x = cloud->points[*pit].x;
+			temCloud->points[k].y = cloud->points[*pit].y;
+			temCloud->points[k].z = cloud->points[*pit].z;
+			temCloud->points[k].r = 255;
+			temCloud->points[k].g = 0;
+			temCloud->points[k].b = 0;
+		k++;
+		}
+
+    //重心位置の算出
+		Eigen::Vector4f xyz_centroid;
+	  pcl::compute3DCentroid(*temCloud, xyz_centroid);
+
+    //一番大きい箇所までの直径の算出
+		float dist = 0;
+		for (int i = 0;i < k;i++) {
+			float value = (temCloud->points[i].x - xyz_centroid[0])*(temCloud->points[i].x - xyz_centroid[0]);
+			value += (temCloud->points[i].y - xyz_centroid[1])*(temCloud->points[i].y - xyz_centroid[1]);
+			value += (temCloud->points[i].z - xyz_centroid[2])*(temCloud->points[i].z - xyz_centroid[2]);
+			if(dist < value)dist = value;
+		}
+		dist = pow(dist,0.5);
+
+    //一番大きい箇所までの直径が指定よりも大きければ消去する
+		if(dist >= DIST_VALUE -0.06  && dist <= DIST_VALUE + 0.06){
+			float xyz_centroid_buf[3];
+			for(int i = 0;i<3;i++){xyz_centroid_buf[i] = xyz_centroid[i];}
+
+      rotationZ(xyz_centroid_buf,(-1.0 * robotPos.angleZ()) - (-1.0 * initRobotPos.angleZ()));
+			moveCloud(xyz_centroid_buf,robotPos.cartesianX()-initRobotPos.cartesianX(),robotPos.cartesianY()-initRobotPos.cartesianY(),robotPos.cartesianZ()-initRobotPos.cartesianZ());
+
+      //行ったこと:座標系をロボットに合わる、カメラのy軸の回転を補正、ロボットが回転することによるズレを補正、ロボットが移動することによるズレを補正
+      //行っていないこと:カメラのz軸の回転を補正、カメラの原点をロボットの位置に移動
+      addShuttlePoint(xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2]);
+      //printf("%3.5f %3.5f %3.5f\n",xyz_centroid_buf[0],xyz_centroid_buf[1],xyz_centroid_buf[2]);
+    }
+	}
+}
+
 void Orbit::shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered)
 {
 	pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGBA>);
@@ -281,7 +341,7 @@ void Orbit::shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::
 			float xyz_centroid_buf[3];
 			for(int i = 0;i<3;i++){xyz_centroid_buf[i] = xyz_centroid[i];}
 
-      rotationZ(cloud_filtered,(-1.0 * robotPos.angleZ()) - (-1.0 * initRobotPos.angleZ()));
+      rotationZ(xyz_centroid_buf,(-1.0 * robotPos.angleZ()) - (-1.0 * initRobotPos.angleZ()));
 			moveCloud(xyz_centroid_buf,robotPos.cartesianX()-initRobotPos.cartesianX(),robotPos.cartesianY()-initRobotPos.cartesianY(),robotPos.cartesianZ()-initRobotPos.cartesianZ());
 
       //行ったこと:座標系をロボットに合わる、カメラのy軸の回転を補正、ロボットが回転することによるズレを補正、ロボットが移動することによるズレを補正

@@ -261,14 +261,16 @@ private:
     lock.unlock();
   }
 
-  //float angle[3] = {10.0,0.0,0.0};
-  //#define DEBUG
+  #define DEBUG_DATA_ON
+  #define DATA_VIEW_ON
 
   void pclViewer()
   {
     cv::Mat color, depth;
-    pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Cloud Viewer"));
-    const std::string cloudName = "rendered";
+    #ifdef DATA_VIEW_ON
+      pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Cloud Viewer"));
+      const std::string cloudName = "rendered";
+    #endif
 
     lock.lock();
     color = this->color;
@@ -278,15 +280,17 @@ private:
 
     createCloud(depth, color, cloud);
 
-    visualizer->addPointCloud(cloud, cloudName);
-    visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
-    visualizer->initCameraParameters();
-    visualizer->setBackgroundColor(0, 0, 0);
-    visualizer->setPosition(mode == PCL ? color.cols : 0, 0);
-    visualizer->setSize(color.cols, color.rows);
-    visualizer->setShowFPS(true);
-    visualizer->setCameraPosition(0,0,0,0,-1,0);
-    visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
+    #ifdef DATA_VIEW_ON
+      visualizer->addPointCloud(cloud, cloudName);
+      visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
+      visualizer->initCameraParameters();
+      visualizer->setBackgroundColor(0, 0, 0);
+      visualizer->setPosition(mode == PCL ? color.cols : 0, 0);
+      visualizer->setSize(color.cols, color.rows);
+      visualizer->setShowFPS(true);
+      visualizer->setCameraPosition(0,0,0,0,-1,0);
+      visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
+    #endif
 
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr filterCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr pointViewCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
@@ -346,7 +350,9 @@ private:
           old_usec = recTime.tv_usec;
           orbit.setup();
           orbit.setInitRobotXYZ(robotPos);
-          //printf("setup\n");
+          #ifdef DATA_VIEW_ON
+            printf("setup\n");
+          #endif
         }
 
         orbit.filter(cloud,filterCloud);
@@ -362,10 +368,14 @@ private:
             case 1://TZ2
               ringMode++;
               if(orbit.passCheckN(buf,&shuttlePoint[0],&shuttlePoint[1])){
-                printf("GOAL\n");
+                #ifdef DATA_VIEW_ON
+                  printf("GOAL\n\n");
+                #endif
                 serial.write(0.0,0.0);
               }else{
-                printf("Y:%3.5f Z::%3.5f\n",shuttlePoint[0],shuttlePoint[1]);
+                #ifdef DATA_VIEW_ON
+                  printf("Y:%3.5f Z::%3.5f\n\n",shuttlePoint[0],shuttlePoint[1]);
+                #endif
                 serial.write(shuttlePoint[0],shuttlePoint[1]);
               }
               break;
@@ -380,33 +390,38 @@ private:
           }else{
             orbit.setRobotXYZ(robotPos);
 
-#ifdef DEBUG
-          for(int i = 0; i< 8;i++){
-            orbit.addShuttlePoint(xyz_centroid_buf[i][0],xyz_centroid_buf[i][1],xyz_centroid_buf[i][2]);
-          }
-          debug_flg = true;
-#else
-          orbit.shuttleDiscovery(filterCloud,shuttleDiscoveryCloud);
-#endif
-
+          #ifdef DEBUG_DATA_ON
+            for(int i = 0; i< 8;i++){
+              orbit.addShuttlePoint(xyz_centroid_buf[i][0],xyz_centroid_buf[i][1],xyz_centroid_buf[i][2]);
+            }
+            debug_flg = true;
+          #else
+            #ifdef DATA_VIEW_ON
+              orbit.shuttleDiscovery(filterCloud,shuttleDiscoveryCloud);
+            #else
+              orbit.shuttleDiscovery(filterCloud);
+            #endif
+          #endif
           }
         }
         //--------------------------------------------------
-        pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
-        mergeCloud(campus,cloud,campus);
+        #ifdef DATA_VIEW_ON
+          pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
+          mergeCloud(campus,cloud,campus);
 
-        rotationX(campus,M_PI_2);
-        rotationZ(campus,-1.0 * M_PI_2);
-        rotationY(campus,CAMERA_ANGLE_Y * M_PI/180.0);
-        moveCloud(campus,CAMERA_SETUP_POS_X,CAMERA_SETUP_POS_Y,CAMERA_SETUP_POS_Z);
-        rotationZ(campus,-1.0 * robotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
-        moveCloud(campus,robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
+          rotationX(campus,M_PI_2);
+          rotationZ(campus,-1.0 * M_PI_2);
+          rotationY(campus,CAMERA_ANGLE_Y * M_PI/180.0);
+          moveCloud(campus,CAMERA_SETUP_POS_X,CAMERA_SETUP_POS_Y,CAMERA_SETUP_POS_Z);
+          rotationZ(campus,-1.0 * robotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
+          moveCloud(campus,robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
 
-        mergeCloud(campus,shuttleDiscoveryCloud,campus);
-        mergeCloud(campus,pointViewCloud,campus);
+          mergeCloud(campus,shuttleDiscoveryCloud,campus);
+          mergeCloud(campus,pointViewCloud,campus);
 
-        coatView(campus);
-        visualizer->updatePointCloud(campus, cloudName);//*/
+          coatView(campus);
+          visualizer->updatePointCloud(campus, cloudName);//*/
+        #endif
 
         /*//orbit.filter(cloud,filterCloud);
         passThroughContainer(cloud,filterCloud);
@@ -423,9 +438,13 @@ private:
         dispDepth(depth, depthDisp, 12000.0f);
         saveCloudAndImages(cloud, color, depth, depthDisp);
       }
-      visualizer->spinOnce(10);
+      #ifdef DATA_VIEW_ON
+        visualizer->spinOnce(10);
+      #endif
     }
-    visualizer->close();
+    #ifdef DATA_VIEW_ON
+      visualizer->close();
+    #endif
   }
 
   void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *)
