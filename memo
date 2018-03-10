@@ -32,4 +32,31 @@ transformからほしい値を出す
 roslaunch kinect2_viewer pcl.launch
 
 トピックの送信
+//TZ1
 rostopic pub /chatter std_msgs/Float32MultiArray '{data: [5.515,3.275,0.0]}'
+//TZ2
+rostopic pub /chatter std_msgs/Float32MultiArray '{data: [7.515,3.275,0.0]}'
+//TZ3
+rostopic pub /chatter std_msgs/Float32MultiArray '{data: [7.515,5.275,0.0]}'
+//その他
+rostopic pub /chatter std_msgs/Float32MultiArray '{data: [5.515,5.275,0.0]}'
+
+roslaunch本番用
+<launch>
+    <node pkg="kinect2_viewer" type="kinect2_viewer" name="kinect2_viewer" output="screen" args="kinect2 sd pcl"/>
+    <node pkg="rosserial_python" type="serial_node.py" name="serial_node">
+      <param name="port" value="/dev/ttyUSB0"/>
+      <param name="baud" value="115200"/>
+    </node>
+</launch>
+
+roslaunchデバック用
+<launch>
+    <node pkg="kinect2_viewer" type="kinect2_viewer" name="kinect2_viewer" output="screen" args="kinect2 sd pcl"/>
+    <node pkg="rosbag" type="play" name="player" args="--clock /home/ubuntu/bagfiles/free.bag"/>
+    <node pkg="rosserial_python" type="serial_node.py" name="serial_node">
+      <param name="port" value="/dev/ttyUSB0"/>
+      <param name="baud" value="115200"/>
+    </node>
+    <node pkg="rosserial_test" type="rosserial_test" name="rosserial_test"/>
+</launch>

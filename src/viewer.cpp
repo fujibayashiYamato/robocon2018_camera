@@ -262,7 +262,7 @@ private:
   }
 
   #define DEBUG_DATA_ON
-  #define DATA_VIEW_ON
+  //#define DATA_VIEW_ON
 
   void pclViewer()
   {
@@ -300,7 +300,6 @@ private:
     bool start_flg = false;
     bool setup_flg = true;
     bool debug_flg = false;
-    int ringMode = 0;
 
     struct timeval recTime;
     time_t old_sec = 0;
@@ -363,25 +362,22 @@ private:
             orbit.coeCreate();
             orbit.addPointView(buf);
             float shuttlePoint[2] = {0.0};
-            switch (ringMode) {
-            case 0://TZ1
-            case 1://TZ2
-              ringMode++;
-              if(orbit.passCheckN(buf,&shuttlePoint[0],&shuttlePoint[1])){
-                #ifdef DATA_VIEW_ON
-                  printf("GOAL\n\n");
-                #endif
-                serial.write(0.0,0.0);
-              }else{
-                #ifdef DATA_VIEW_ON
-                  printf("Y:%3.5f Z::%3.5f\n\n",shuttlePoint[0],shuttlePoint[1]);
-                #endif
-                serial.write(shuttlePoint[0],shuttlePoint[1]);
-              }
-              break;
-            case 2://TZ3
-              ringMode = 0;
-              break;
+            #ifdef DATA_VIEW_ON
+              printf("AREA:%d\n",orbit.checkArea());
+              int passCheckMode = orbit.passCheck(buf,&shuttlePoint[0],&shuttlePoint[1]);
+            #else
+              int passCheckMode = orbit.passCheck(&shuttlePoint[0],&shuttlePoint[1]);
+            #endif
+            if(passCheckMode == 0){
+              #ifdef DATA_VIEW_ON
+                printf("Y:%3.5f Z::%3.5f\n\n",shuttlePoint[0],shuttlePoint[1]);
+              #endif
+              serial.write(shuttlePoint[0],shuttlePoint[1]);
+            }else if(passCheckMode == 1){
+              #ifdef DATA_VIEW_ON
+                printf("GOAL\n\n");
+              #endif
+              serial.write(0.0,0.0);
             }
             *pointViewCloud = *buf;
             start_flg = false;

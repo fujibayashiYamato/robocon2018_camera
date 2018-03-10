@@ -70,14 +70,15 @@ public:
   void setup();
   void addPointView(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
   void addShuttlePoint(float posX,float posY,float posZ);
+	int checkArea();
   void coeCreate();
   void coordConversion(float *point);//ロボットの座標系に合わせる
   void coordConversion(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);//ロボットの座標系に合わせる
   void filter(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered);
   float getPointY();
   float getPointZ(float pointX);
-  bool passCheckN(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,float* Z);
-	bool passCheckG();
+	int passCheck(float* Y,float* Z);//0:リングに入っていない 1:リングに入った 2:ゾーンに入っていない
+	int passCheck(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,float* Z);//0:リングに入っていない 1:リングに入った 2:ゾーンに入っていない
   void setRobotXYZ(Coord<float,float> &coord);
 	void setInitRobotXYZ(Coord<float,float> &coord);
 	void shiftCorrection(float* value);
@@ -136,6 +137,19 @@ void Orbit::addShuttlePoint(float posX,float posY,float posZ)
 	shuttlePointZ.push_back(posZ);
 }
 
+int Orbit::checkArea()
+{
+	if(TZ1_X - 0.985 <= initRobotPos.cartesianX() && TZ1_X + 0.985 >= initRobotPos.cartesianX() && TZ1_Y - 1.615 <= initRobotPos.cartesianY() && TZ1_Y + 1.615 >= initRobotPos.cartesianY()){
+		return 1;
+	}else if(TZ2_X - 0.985 <= initRobotPos.cartesianX() && TZ2_X + 0.985 >= initRobotPos.cartesianX() && TZ2_Y - 1.615 <= initRobotPos.cartesianY() && TZ2_Y + 1.615 >= initRobotPos.cartesianY()){
+		return 2;
+	}else if(TZ3_X - 0.985 <= initRobotPos.cartesianX() && TZ3_X + 0.985 >= initRobotPos.cartesianX() && TZ3_Y - 1.615 <= initRobotPos.cartesianY() && TZ3_Y + 1.615 >= initRobotPos.cartesianY()){
+		return 3;
+	}else{
+		return 0;
+	}
+}
+
 void Orbit::coeCreate()
 {
   lsm.sai(shuttlePointX, shuttlePointZ, shuttlePointX.size());
@@ -184,52 +198,106 @@ void Orbit::filter(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud
 float Orbit::getPointY(){return avePointY;}
 float Orbit::getPointZ(float pointX){return coeA * pointX * pointX + coeB * pointX + coeC;}//ロボットの座標系
 
-bool Orbit::passCheckN(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,float* Z)
-{
-  float shuttlePoint[3] = {0.0};
-  float relativeRingPos[3] = {0.0};
-  float ringX = 0.0;
+int Orbit::passCheck(float* Y,float* Z){
+	int area = checkArea();
+	if(area != 0){
+		float shuttlePoint[3] = {0.0};
+	  float relativeRingPos[3] = {0.0};
+	  float ringX = 0.0;
 
-  //リングの位置をロボットから見た相対的なものに
-	relativeRingPos[0] = N_RING_X - initRobotPos.cartesianX();
-  relativeRingPos[1] = N_RING_Y - initRobotPos.cartesianY();
-  relativeRingPos[2] = N_RING_Z - initRobotPos.cartesianZ();
+	  //リングの位置をロボットから見た相対的なものに
+		if(area == 1 || area == 2){
+			relativeRingPos[0] = N_RING_X - initRobotPos.cartesianX();
+		  relativeRingPos[1] = N_RING_Y - initRobotPos.cartesianY();
+		  relativeRingPos[2] = N_RING_Z - initRobotPos.cartesianZ();
+		}else if(area == 3){
+			relativeRingPos[0] = G_RING_X - initRobotPos.cartesianX();
+		  relativeRingPos[1] = G_RING_Y - initRobotPos.cartesianY();
+		  relativeRingPos[2] = G_RING_Z - initRobotPos.cartesianZ();
+		}
+	  ringX = relativeRingPos[0] / cos(-1.0 * initRobotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
 
-  ringX = relativeRingPos[0] / cos(-1.0 * initRobotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
+	  //リングのxをつかい、シャトルの位置を予想
+	  shuttlePoint[0] = ringX;
+	  shuttlePoint[1] = getPointY();
+	  shuttlePoint[2] = getPointZ(ringX);
 
-  //リングのxをつかい、シャトルの位置を予想
-  shuttlePoint[0] = ringX;
-  shuttlePoint[1] = getPointY();
-  shuttlePoint[2] = getPointZ(ringX);
+	  rotationZ(shuttlePoint,-1.0 * initRobotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
 
-  rotationZ(shuttlePoint,-1.0 * initRobotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
+	  *Y = shuttlePoint[1] - relativeRingPos[1];
+		*Z = shuttlePoint[2] - relativeRingPos[2];
 
-  *Y = shuttlePoint[1] - relativeRingPos[1];
-	*Z = shuttlePoint[2] - relativeRingPos[2];
-
-  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr buf(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  float campusPoint[3] = {0.0};
-  for(int i = 0;i<3;i++){campusPoint[i] = shuttlePoint[i];}
-  moveCloud(campusPoint,initRobotPos.cartesianX(),initRobotPos.cartesianY(),initRobotPos.cartesianZ());
-  addSphereCloud(buf,campusPoint[0],campusPoint[1],campusPoint[2],0,0,255);
-  mergeCloud(cloud,buf,cloud);
-
-  //輪の中にあればtrue,違うのであればfalse
-  if(relativeRingPos[1] - (0.4 - SHUTTLE_D/2.0) <= shuttlePoint[1]){
-		if(relativeRingPos[1] + (0.4 - SHUTTLE_D/2.0)>= shuttlePoint[1]){
-			if(sqrt(pow(0.4 - SHUTTLE_D/2.0,2)-pow(shuttlePoint[1] - relativeRingPos[1],2)) + relativeRingPos[2] >= shuttlePoint[2]){
-				if(-1.0 * sqrt(pow(0.4 - SHUTTLE_D/2.0,2)-pow(shuttlePoint[1] - relativeRingPos[1],2)) + relativeRingPos[2] <= shuttlePoint[2]){
-					return true;
+	  //輪の中にあればtrue,違うのであればfalse
+	  if(relativeRingPos[1] - (0.4 - SHUTTLE_D/2.0) <= shuttlePoint[1]){
+			if(relativeRingPos[1] + (0.4 - SHUTTLE_D/2.0)>= shuttlePoint[1]){
+				if(sqrt(pow(0.4 - SHUTTLE_D/2.0,2)-pow(shuttlePoint[1] - relativeRingPos[1],2)) + relativeRingPos[2] >= shuttlePoint[2]){
+					if(-1.0 * sqrt(pow(0.4 - SHUTTLE_D/2.0,2)-pow(shuttlePoint[1] - relativeRingPos[1],2)) + relativeRingPos[2] <= shuttlePoint[2]){
+						return 1;
+					}
 				}
 			}
 		}
+		return 0;
+	}else{
+		return 2;
 	}
-	return false;
 }
 
-bool Orbit::passCheckG()
-{
+int Orbit::passCheck(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,float* Z){
+	int area = checkArea();
+	if(area != 0){
+		float shuttlePoint[3] = {0.0};
+	  float relativeRingPos[3] = {0.0};
+	  float ringX = 0.0;
 
+	  //リングの位置をロボットから見た相対的なものに
+		if(area == 1 || area == 2){
+			relativeRingPos[0] = N_RING_X - initRobotPos.cartesianX();
+		  relativeRingPos[1] = N_RING_Y - initRobotPos.cartesianY();
+		  relativeRingPos[2] = N_RING_Z - initRobotPos.cartesianZ();
+		}else if(area == 3){
+			relativeRingPos[0] = G_RING_X - initRobotPos.cartesianX();
+		  relativeRingPos[1] = G_RING_Y - initRobotPos.cartesianY();
+		  relativeRingPos[2] = G_RING_Z - initRobotPos.cartesianZ();
+		}
+	  ringX = relativeRingPos[0] / cos(-1.0 * initRobotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
+
+	  //リングのxをつかい、シャトルの位置を予想
+	  shuttlePoint[0] = ringX;
+	  shuttlePoint[1] = getPointY();
+	  shuttlePoint[2] = getPointZ(ringX);
+
+	  rotationZ(shuttlePoint,-1.0 * initRobotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
+
+	  *Y = shuttlePoint[1] - relativeRingPos[1];
+		*Z = shuttlePoint[2] - relativeRingPos[2];
+
+		//描画するために角度と位置変更
+	  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr buf(new pcl::PointCloud<pcl::PointXYZRGBA>);
+	  float campusPoint[3] = {0.0};
+	  for(int i = 0;i<3;i++){campusPoint[i] = shuttlePoint[i];}
+	  moveCloud(campusPoint,initRobotPos.cartesianX(),initRobotPos.cartesianY(),initRobotPos.cartesianZ());
+	  addSphereCloud(buf,campusPoint[0],campusPoint[1],campusPoint[2],0,0,255);
+
+		if(area == 1 || area == 2){addSphereCloud(buf,N_RING_X,N_RING_Y,N_RING_Z,255,0,0);}
+		else if(area == 3){addSphereCloud(buf,G_RING_X,G_RING_Y,G_RING_Z,255,255,0);}
+
+	  mergeCloud(cloud,buf,cloud);
+
+	  //輪の中にあればtrue,違うのであればfalse
+	  if(relativeRingPos[1] - (0.4 - SHUTTLE_D/2.0) <= shuttlePoint[1]){
+			if(relativeRingPos[1] + (0.4 - SHUTTLE_D/2.0)>= shuttlePoint[1]){
+				if(sqrt(pow(0.4 - SHUTTLE_D/2.0,2)-pow(shuttlePoint[1] - relativeRingPos[1],2)) + relativeRingPos[2] >= shuttlePoint[2]){
+					if(-1.0 * sqrt(pow(0.4 - SHUTTLE_D/2.0,2)-pow(shuttlePoint[1] - relativeRingPos[1],2)) + relativeRingPos[2] <= shuttlePoint[2]){
+						return 1;
+					}
+				}
+			}
+		}
+		return 0;
+	}else{
+		return 2;
+	}
 }
 
 void Orbit::setRobotXYZ(Coord<float,float> &coord){this->robotPos = coord;}

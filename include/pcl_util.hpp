@@ -60,6 +60,16 @@ using namespace std;
 #define G_RING_Y 6.535
 #define G_RING_Z 3.4
 
+#define TZ1_X 4.565
+#define TZ1_Y 3.275
+#define TZ1_Z 0.0
+#define TZ2_X 6.565
+#define TZ2_Y 3.275
+#define TZ2_Z 0.0
+#define TZ3_X 6.565
+#define TZ3_Y 6.535
+#define TZ3_Z 0.0
+
 #define APPVOX_VALUE 0.03f
 
 void addFloorCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float x0,float y0,float x1,float y1,int r,int g,int b);
