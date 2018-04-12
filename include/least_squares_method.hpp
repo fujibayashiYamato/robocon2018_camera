@@ -1,7 +1,7 @@
 #ifndef LEAST_SQUARES_METHOD_HPP_INCLUDE
 #define LEAST_SQUARES_METHOD_HPP_INCLUDE
 
-#define Q_NUM 3             //�K�E�X�̏����@�ɂ����関�m���̐��i����n�Ɠ����l�ɂ��邱�Ɓj
+#define Q_NUM 3
 
 #include <stdio.h>
 #include <vector>

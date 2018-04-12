@@ -31,15 +31,23 @@ transformからほしい値を出す
 ランチにまとめると楽だよ
 roslaunch kinect2_viewer pcl.launch
 
+rosrun rosserial_python serial_node.py _port:=/dev/ttyUSB0 _baud:=115200
+
 トピックの送信
+
+rostopic pub /array std_msgs/Float32MultiArray '{data: [4.565,3.275]}'
+
 //TZ1
-rostopic pub /chatter std_msgs/Float32MultiArray '{data: [5.515,3.275,0.0]}'
+rostopic pub /chatter std_msgs/Float32MultiArray '{data: [4.565,3.275,0.0]}'
 //TZ2
-rostopic pub /chatter std_msgs/Float32MultiArray '{data: [7.515,3.275,0.0]}'
+rostopic pub /chatter std_msgs/Float32MultiArray '{data: [6.565,3.275,0.0]}'
 //TZ3
-rostopic pub /chatter std_msgs/Float32MultiArray '{data: [7.515,5.275,0.0]}'
+rostopic pub /chatter std_msgs/Float32MultiArray '{data: [6.565,6.535,0.0]}'
 //その他
-rostopic pub /chatter std_msgs/Float32MultiArray '{data: [5.515,5.275,0.0]}'
+rostopic pub /chatter std_msgs/Float32MultiArray '{data: [6.565,5.275,0.0]}'
+
+受信
+rostopic echo /array
 
 roslaunch本番用
 <launch>
@@ -60,3 +68,9 @@ roslaunchデバック用
     </node>
     <node pkg="rosserial_test" type="rosserial_test" name="rosserial_test"/>
 </launch>
+
+y=ax^2+bx+c
+
+ax^2+bx+(c-y)=0
+-0.158289
+-0.007983

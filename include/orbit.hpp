@@ -57,9 +57,9 @@ using namespace std;
 
 #define CAMERA_SETUP_POS_X 0.0//ロボットから見たカメラの位置
 #define CAMERA_SETUP_POS_Y 0.0//ロボットから見たカメラの位置
-#define CAMERA_SETUP_POS_Z 0.0//ロボットから見たカメラの位置
+#define CAMERA_SETUP_POS_Z 0.12//0.07//ロボットから見たカメラの位置
 
-#define CAMERA_ANGLE_Y -22.5//degry カメラの設置時のy軸の角度
+#define CAMERA_ANGLE_Y -23//-25.75//-22.5//degry カメラの設置時のy軸の角度
 #define DIST_VALUE 0.14f
 #define CLUSTERING_NUM 51
 #define SHUTTLE_D 0.14f
@@ -68,41 +68,62 @@ class Orbit{
 public:
 	Orbit();
   void setup();
-  void addPointView(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
-  void addShuttlePoint(float posX,float posY,float posZ);
-	int checkArea();
-  void coeCreate();
+  void addPointView(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);//シャトルの軌跡、取得した位置の表示
+  void addShuttlePoint(float posX,float posY,float posZ);//引数に入れたシャトルコックの座標を保存する
+	int checkArea();//ロボットがどのエリアにいるのかを確認する 0:エリア外 1:TZ1 2:TZ2 3:TZ3
+  void coeCreate();//y=ax^2+bx+cのabcを計算し保存する
   void coordConversion(float *point);//ロボットの座標系に合わせる
   void coordConversion(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);//ロボットの座標系に合わせる
-  void filter(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered);
-  float getPointY();
-  float getPointZ(float pointX);
-	int passCheck(float* Y,float* Z);//0:リングに入っていない 1:リングに入った 2:ゾーンに入っていない
-	int passCheck(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,float* Z);//0:リングに入っていない 1:リングに入った 2:ゾーンに入っていない
-  void setRobotXYZ(Coord<float,float> &coord);
-	void setInitRobotXYZ(Coord<float,float> &coord);
-	void shiftCorrection(float* value);
-	void shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
-  void shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered);
+	int cupCheck(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);//ゴールデンカップに入ったかか確認 0:カップに入っていない 1:リングに入った 2:TZ3ではない
+	void filter(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered);//シャトルを見つける前の動作を軽くするためのフィルター類
+	float getGeinAir();//擬似的な空気抵抗を返す
+	float getGeinAir(float pointX);//擬似的な空気抵抗を使った時のxの減少値
+	float getPointX(float pointZ);//z=ax^2+bx+cのzを求めるバージョン
+	float getPointY();//avePointYを返す
+  float getPointZ(float pointX);//z=ax^2+bx+c
+	int passCheck(float* Y,float* Z);//リングを通ったか確認 0:リングに入っていない 1:リングに入った 2:エリアに入っていない 本番用
+	int passCheck(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,float* Z);//リングを通ったか確認 0:リングに入っていない 1:リングに入った 2:エリアに入っていない 表示用
+	void ringCut(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered);//ノイズ除去の目的でリングのある位置の点群を消す 相対的な座標用 z軸回転前
+	void ringCutNotMove(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered);//ノイズ除去の目的でリングのある位置の点群を消す 絶対的な座標用 z軸回転後
+	void setCameraSetupPos(Coord<float,float> &coord);//ロボットから見たカメラの位置を保存する
+	void setGeinAir(float value);//geinAirを更新する
+	void setRobotXYZ(Coord<float,float> &coord);//ロボットの現在位置を保存する
+	void setInitRobotXYZ(Coord<float,float> &coord);//ロボットの射出位置を保存する
+	void shiftCorrection(float* value);//ロボットが射出位置にいない時ようにズレを補正する
+	void shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);//シャトルコックを見つけ座標を保存する 本番用
+  void shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered);//シャトルコックを見つけ座標を保存する 表示用
 private:
   Coord<float,float> initRobotPos;//射出時のロボットの位置
   Coord<float,float> robotPos;//現在のロボットの位置
-  vector<float> shuttlePointX;
-	vector<float> shuttlePointY;
-	vector<float> shuttlePointZ;
-  Lsm lsm;
-	float coeA;
-	float coeB;
-	float coeC;
-  float avePointY;
+	Coord<float,float> cameraSetupPos;//ロボットから見たカメラの位置
+  vector<float> shuttlePointX;//シャトルコックの位置 X座標
+	vector<float> shuttlePointY;//シャトルコックの位置 Y座標
+	vector<float> shuttlePointZ;//シャトルコックの位置 Z座標
+	vector<float> shuttleTime;//シャトルコック発見時の時間 プログラム開始時から
+  Lsm lsmXZ;//近似曲線の係数を決めるクラス
+  float avePointY;//Yの平均値 基本的にまっすぐ飛ぶため
+	struct timeval recTime;//時間
+	time_t old_sec;//時間
+	suseconds_t old_usec;//時間
+	float geinAir;//擬似的な空気抵抗
 };
 
 Orbit::Orbit()
 {
-  coeA = 0.0;
-  coeB = 0.0;
-  coeC = 0.0;
+	shuttlePointX.clear();
+	shuttlePointY.clear();
+	shuttlePointZ.clear();
+	shuttleTime.clear();
+	geinAir = 0.0;
   avePointY = 0.0;
+	cameraSetupPos.cartesianX(CAMERA_SETUP_POS_X);
+	cameraSetupPos.cartesianY(CAMERA_SETUP_POS_Y);
+	cameraSetupPos.cartesianZ(CAMERA_SETUP_POS_Z);
+	cameraSetupPos.angleY(CAMERA_ANGLE_Y * M_PI/180.0);
+
+	gettimeofday(&recTime, NULL);
+	old_sec = recTime.tv_sec;
+	old_usec = recTime.tv_usec;
 }
 
 void Orbit::setup()
@@ -110,19 +131,28 @@ void Orbit::setup()
   shuttlePointX.clear();
 	shuttlePointY.clear();
 	shuttlePointZ.clear();
-  coeA = 0.0;
-  coeB = 0.0;
-  coeC = 0.0;
+	shuttleTime.clear();
   avePointY = 0.0;
 }
 
+//シャトルの軌跡、取得した位置の表示
 void Orbit::addPointView(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 {
 	for(int i = 0;i < shuttlePointX.size();i++){
 		addSphereCloud(cloud,shuttlePointX[i],shuttlePointY[i],shuttlePointZ[i],255,0,0);
 	}
-	for(int i = 0;i < 100;i++){
-		addSphereCloud(cloud,float(-0.07 * i),getPointY(),getPointZ(float(-0.07 * i)),0,255,0);
+
+	for(int i = 0;i < 150;i++){
+		addSphereCloud(cloud,float(-0.1 * i),getPointY(),getPointZ(float(-0.1 * i)),0,255,0);
+	}
+
+	int area = checkArea();
+	if(area == 3){
+		float x;
+		for(int i = 100;i < 150;i++){
+			x = (1.0-sqrtf(1.0-4.0*geinAir*float(-0.1 * i)))/(2.0*geinAir);
+			addSphereCloud(cloud,x,getPointY(),getPointZ(float(-0.1 * i)),0,255,0);
+		}
 	}
 
   rotationZ(cloud,-1.0 * initRobotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
@@ -130,13 +160,19 @@ void Orbit::addPointView(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
   //printf("%3.5f:%3.5f:%3.5f\n",initRobotPos.cartesianX(),initRobotPos.cartesianY(),initRobotPos.cartesianZ());
 }
 
+//引数に入れたシャトルコックの座標を保存する
 void Orbit::addShuttlePoint(float posX,float posY,float posZ)
 {
 	shuttlePointX.push_back(posX);
 	shuttlePointY.push_back(posY);
 	shuttlePointZ.push_back(posZ);
+	gettimeofday(&recTime, NULL);
+	float timeNow = (recTime.tv_sec - old_sec) + (recTime.tv_usec - old_usec)/1000.0/1000.0;
+	shuttleTime.push_back(timeNow);
+	printf("addShuttlePoint\t%f\t%f\t%f\n",posX,posZ,timeNow);
 }
 
+//ロボットがどのエリアにいるのかを確認する 0:エリア外 1:TZ1 2:TZ2 3:TZ3
 int Orbit::checkArea()
 {
 	if(TZ1_X - 0.985 <= initRobotPos.cartesianX() && TZ1_X + 0.985 >= initRobotPos.cartesianX() && TZ1_Y - 1.615 <= initRobotPos.cartesianY() && TZ1_Y + 1.615 >= initRobotPos.cartesianY()){
@@ -150,12 +186,11 @@ int Orbit::checkArea()
 	}
 }
 
+//y=ax^2+bx+cのabcを計算し保存する
 void Orbit::coeCreate()
 {
-  lsm.sai(shuttlePointX, shuttlePointZ, shuttlePointX.size());
-	coeC = lsm.x[0];
-	coeB = lsm.x[1];
-	coeA = lsm.x[2];
+  lsmXZ.sai(shuttlePointX, shuttlePointZ, shuttlePointX.size());
+	printf("coe\t%f\t%f\t%f\n",lsmXZ.x[2],lsmXZ.x[1],lsmXZ.x[0]);
 
 	float sam = 0;
 	for(int i = 0;i < shuttlePointY.size();i++){
@@ -168,8 +203,8 @@ void Orbit::coordConversion(float *point)
 {
   rotationX(point,M_PI_2);
   rotationZ(point,-1.0 *M_PI_2);
-  rotationY(point,CAMERA_ANGLE_Y * M_PI/180.0);
-  moveCloud(point,CAMERA_SETUP_POS_X,CAMERA_SETUP_POS_Y,CAMERA_SETUP_POS_Z);
+  rotationY(point,cameraSetupPos.angleY());
+  moveCloud(point,cameraSetupPos.cartesianX(),cameraSetupPos.cartesianY(),cameraSetupPos.cartesianZ());
   //rotationZ(point,-1.0 * robotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
   //moveCloud(point,robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
 }
@@ -178,28 +213,93 @@ void Orbit::coordConversion(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 {
   rotationX(cloud,M_PI_2);
   rotationZ(cloud,-1.0 * M_PI_2);
-  rotationY(cloud,CAMERA_ANGLE_Y * M_PI/180.0);
-  moveCloud(cloud,CAMERA_SETUP_POS_X,CAMERA_SETUP_POS_Y,CAMERA_SETUP_POS_Z);
+  rotationY(cloud,cameraSetupPos.angleY());
+  moveCloud(cloud,cameraSetupPos.cartesianX(),cameraSetupPos.cartesianY(),cameraSetupPos.cartesianZ());
   //rotationZ(cloud,-1.0 * robotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
   //moveCloud(cloud,robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
 }
 
+//ゴールデンカップに入ったかか確認 0:カップに入っていない 1:リングに入った 2:TZ3ではない
+int Orbit::cupCheck(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
+{
+	float shuttlePoint[3] = {0.0};
+	float relativeCupPos[3] = {0.0};
+	float cupZ = 0.0;
+
+	int area = checkArea();
+	if(area == 3){
+		//カップの位置をロボットから見た相対的なものに
+		relativeCupPos[0] = G_CAP_X - initRobotPos.cartesianX();
+	  relativeCupPos[1] = G_CAP_Y - initRobotPos.cartesianY();
+	  relativeCupPos[2] = (G_CAP_Z + 0.079) - initRobotPos.cartesianZ();//カップの縁の高さ
+
+		cupZ = relativeCupPos[2];
+
+		//カップのxをつかい、シャトルの位置を予想
+		float x;
+		x = (1.0-sqrtf(1.0-4.0*geinAir*getPointX(cupZ)))/(2.0*geinAir);
+	  shuttlePoint[0] = x;
+	  shuttlePoint[1] = getPointY();
+	  shuttlePoint[2] = cupZ;
+
+		printf("cup:\t%f\t%f\n",shuttlePoint[0]-relativeCupPos[0],shuttlePoint[1]-relativeCupPos[1]);
+
+	  rotationZ(shuttlePoint,-1.0 * initRobotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
+
+		//描画するために角度と位置変更
+	  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr buf(new pcl::PointCloud<pcl::PointXYZRGBA>);
+	  float campusPoint[3] = {0.0};
+	  for(int i = 0;i<3;i++){campusPoint[i] = shuttlePoint[i];}
+	  moveCloud(campusPoint,initRobotPos.cartesianX(),initRobotPos.cartesianY(),initRobotPos.cartesianZ());
+	  addSphereCloud(buf,campusPoint[0],campusPoint[1],campusPoint[2],0,0,255);
+
+	  mergeCloud(cloud,buf,cloud);
+
+		//カップの中にあればtrue,違うのであればfalse
+	  if(relativeCupPos[0] - (0.6 - SHUTTLE_D/2.0) <= shuttlePoint[0]){
+			if(relativeCupPos[0] + (0.6 - SHUTTLE_D/2.0) >= shuttlePoint[0]){
+				if(sqrt(pow(0.6 - SHUTTLE_D/2.0,2)-pow(shuttlePoint[0] - relativeCupPos[0],2)) + relativeCupPos[1] >= shuttlePoint[1]){
+					if(-1.0 * sqrt(pow(0.6 - SHUTTLE_D/2.0,2)-pow(shuttlePoint[0] - relativeCupPos[0],2)) + relativeCupPos[1] <= shuttlePoint[1]){
+						return 1;
+					}
+				}
+			}
+		}
+		return 0;
+	}else{
+		return 2;
+	}
+}
+
+//シャトルを見つける前の動作を軽くするためのフィルター類
 void Orbit::filter(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered)
 {
 	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr passThroughCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
 	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr voxelGridConCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr radiusOutlierRemovalCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
 
 	passThroughContainer(cloud,passThroughCloud);
 	approximateVoxelGridContainer(passThroughCloud,voxelGridConCloud);
+	//radiusOutlierRemovalContainer(voxelGridConCloud,radiusOutlierRemovalCloud);
 
 	*cloud_filtered = *voxelGridConCloud;
 }
 
+//擬似的な空気抵抗を返す
+float Orbit::getGeinAir(){return geinAir;}
+//擬似的な空気抵抗を使った時のxの減少値
+float Orbit::getGeinAir(float pointX){return geinAir * pointX * pointX;}
+//z=ax^2+bx+cのzを求めるバージョン
+float Orbit::getPointX(float pointZ){return (-lsmXZ.x[1] + sqrtf((lsmXZ.x[1]*lsmXZ.x[1])-4.0*lsmXZ.x[2]*(lsmXZ.x[0]-pointZ)))/(2.0*lsmXZ.x[2]);}//ロボットの座標系
+//avePointYを返す
 float Orbit::getPointY(){return avePointY;}
-float Orbit::getPointZ(float pointX){return coeA * pointX * pointX + coeB * pointX + coeC;}//ロボットの座標系
+//z=ax^2+bx+c
+float Orbit::getPointZ(float pointX){return lsmXZ.x[2] * pointX * pointX + lsmXZ.x[1] * pointX + lsmXZ.x[0];}//ロボットの座標系
 
+//リングを通ったか確認 0:リングに入っていない 1:リングに入った 2:エリアに入っていない 本番用
 int Orbit::passCheck(float* Y,float* Z){
 	int area = checkArea();
+	if(lsmXZ.x[2] >= 0)return 2;
 	if(area != 0){
 		float shuttlePoint[3] = {0.0};
 	  float relativeRingPos[3] = {0.0};
@@ -243,8 +343,10 @@ int Orbit::passCheck(float* Y,float* Z){
 	}
 }
 
+//リングを通ったか確認 0:リングに入っていない 1:リングに入った 2:エリアに入っていない 表示用
 int Orbit::passCheck(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,float* Z){
 	int area = checkArea();
+	if(lsmXZ.x[2] >= 0)return 2;
 	if(area != 0){
 		float shuttlePoint[3] = {0.0};
 	  float relativeRingPos[3] = {0.0};
@@ -300,15 +402,90 @@ int Orbit::passCheck(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,float* Y,floa
 	}
 }
 
+//ノイズ除去の目的でリングのある位置の点群を消す 相対的な座標用 z軸回転前
+void Orbit::ringCut(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered)
+{
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr buff(new pcl::PointCloud<pcl::PointXYZRGBA>);
+
+	rotationZ(cloud,-1.0 * robotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
+  moveCloud(cloud,robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
+
+
+	Coord<float,float> GT_N;
+	GT_N.cartesianX(N_RING_X - 0.3);
+	GT_N.cartesianY(N_RING_Y - 0.6);
+	GT_N.cartesianZ(N_RING_Z - 2.5);
+
+	Coord<float,float> LT_N;
+	LT_N.cartesianX(N_RING_X + 0.3);
+	LT_N.cartesianY(N_RING_Y + 0.6);
+	LT_N.cartesianZ(N_RING_Z + 0.8);
+
+	Coord<float,float> GT_G;
+	GT_G.cartesianX(G_RING_X - 0.3);
+	GT_G.cartesianY(G_RING_Y - 0.6);
+	GT_G.cartesianZ(G_RING_Z - 3.5);
+
+	Coord<float,float> LT_G;
+	LT_G.cartesianX(G_RING_X + 0.3);
+	LT_G.cartesianY(G_RING_Y + 0.6);
+	LT_G.cartesianZ(G_RING_Z + 0.6);
+
+	pointsCut(cloud,buff,GT_N,LT_N,false);
+	pointsCut(buff,cloud_filtered,GT_G,LT_G,false);
+
+	moveCloud(cloud_filtered,-1.0 * robotPos.cartesianX(),-1.0 * robotPos.cartesianY(),-1.0 * robotPos.cartesianZ());
+	rotationZ(cloud_filtered,robotPos.angleZ());
+
+}
+
+//ノイズ除去の目的でリングのある位置の点群を消す 絶対的な座標用 z軸回転後
+void Orbit::ringCutNotMove(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered)
+{
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr buff(new pcl::PointCloud<pcl::PointXYZRGBA>);
+
+	Coord<float,float> GT_N;
+	GT_N.cartesianX(N_RING_X - 0.3);
+	GT_N.cartesianY(N_RING_Y - 0.6);
+	GT_N.cartesianZ(N_RING_Z - 2.5);
+
+	Coord<float,float> LT_N;
+	LT_N.cartesianX(N_RING_X + 0.3);
+	LT_N.cartesianY(N_RING_Y + 0.6);
+	LT_N.cartesianZ(N_RING_Z + 0.8);
+
+	Coord<float,float> GT_G;
+	GT_G.cartesianX(G_RING_X - 0.3);
+	GT_G.cartesianY(G_RING_Y - 0.6);
+	GT_G.cartesianZ(G_RING_Z - 3.5);
+
+	Coord<float,float> LT_G;
+	LT_G.cartesianX(G_RING_X + 0.3);
+	LT_G.cartesianY(G_RING_Y + 0.6);
+	LT_G.cartesianZ(G_RING_Z + 0.6);
+
+	pointsCut(cloud,buff,GT_N,LT_N,false);
+	pointsCut(buff,cloud_filtered,GT_G,LT_G,false);
+
+}
+
+//ロボットから見たカメラの位置を保存する
+void Orbit::setCameraSetupPos(Coord<float,float> &coord){this->cameraSetupPos = coord;}
+//geinAirを更新する
+void Orbit::setGeinAir(float value){this->geinAir = value;}
+//ロボットの現在位置を保存する
 void Orbit::setRobotXYZ(Coord<float,float> &coord){this->robotPos = coord;}
+//ロボットの射出位置を保存する
 void Orbit::setInitRobotXYZ(Coord<float,float> &coord){this->initRobotPos = coord;}
 
+//ロボットが射出位置にいない時ようにズレを補正する
 void Orbit::shiftCorrection(float* value)
 {
 	rotationZ(value,(-1.0 * robotPos.angleZ()) - (-1.0 * initRobotPos.angleZ()));
 	moveCloud(value,robotPos.cartesianX()-initRobotPos.cartesianX(),robotPos.cartesianY()-initRobotPos.cartesianY(),robotPos.cartesianZ()-initRobotPos.cartesianZ());
 }
 
+//シャトルコックを見つけ座標を保存する 本番用
 void Orbit::shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 {
 	pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGBA>);
@@ -370,6 +547,7 @@ void Orbit::shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud)
 	}
 }
 
+//シャトルコックを見つけ座標を保存する 表示用
 void Orbit::shuttleDiscovery(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered)
 {
 	pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGBA>);

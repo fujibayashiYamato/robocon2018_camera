@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-
  #include <stdlib.h>
  #include <stdio.h>
  #include <iostream>
@@ -44,6 +43,9 @@
  #include <pcl/sample_consensus/model_types.h>
  #include <pcl/sample_consensus/method_types.h>
  #include <pcl/segmentation/sac_segmentation.h>
+
+ #include <pcl/PolygonMesh.h>
+ #include <pcl/io/vtk_lib_io.h>
 
  #include <opencv2/opencv.hpp>
 
@@ -85,6 +87,9 @@
 #include "serial.hpp"
 #include "util.hpp"
 
+
+#include <pcl/filters/statistical_outlier_removal.h>
+
 class Receiver
 {
 public:
@@ -93,7 +98,9 @@ public:
     IMAGE = 0,
     CLOUD,
     BOTH,
-    PCL
+    PCL,
+    DEBUG,
+    CHECK
   };
 
 private:
@@ -208,6 +215,12 @@ private:
     case PCL:
       pclViewer();
       break;
+    case DEBUG:
+      debugViewer();
+      break;
+    case CHECK:
+      checkViewer();
+      break;
     }
   }
 
@@ -262,8 +275,11 @@ private:
     lock.unlock();
   }
 
-  #define DEBUG_DATA_ON
-  //#define DATA_VIEW_ON
+  //#define DEBUG_DATA_ON
+  #define DATA_VIEW_ON
+  bool rec_flg = false;
+  Coord<float,float> cameraSetupPos;
+  float geinAir = 0.02;
 
   void pclViewer()
   {
@@ -295,6 +311,12 @@ private:
 
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr filterCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr pointViewCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr ringCutCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr coordConversionCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr pointsCutCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr coat(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::io::loadPCDFile ("/home/ubuntu/catkin_ws/src/iai_kinect2/kinect2_viewer/pcd/coat01.pcd", *coat);
+
     Orbit orbit;
     RosSerial serial;
 
@@ -307,6 +329,17 @@ private:
     suseconds_t old_usec = 0;
 
     Coord<float,float> robotPos;
+    robotPos.cartesianX(TZ3_X);
+    robotPos.cartesianY(TZ3_Y+0.108);
+    robotPos.angleZ(0.0 * M_PI/180.0);//0.0
+    orbit.setInitRobotXYZ(robotPos);
+    orbit.setRobotXYZ(robotPos);
+
+    cameraSetupPos.cartesianX(0.0);
+    cameraSetupPos.cartesianY(0.0);//0.13
+    cameraSetupPos.cartesianZ(0.033);//0.04
+    cameraSetupPos.angleY(-23.75 * M_PI/180.0);//-25.5
+    orbit.setCameraSetupPos(cameraSetupPos);
 
     float xyz_centroid_buf[8][3] = {
       {-2.59120,-0.04350,2.39335},
@@ -319,10 +352,15 @@ private:
       {-4.80053,-0.07273,2.29812}
     };
 
+    orbit.setGeinAir(0.0245);
+
     for(; running && ros::ok();)
     {
       if(updateCloud)
       {
+
+
+
         lock.lock();
         color = this->color;
         depth = this->depth;
@@ -331,6 +369,7 @@ private:
 
         pcl::PointCloud<pcl::PointXYZRGBA>::Ptr shuttleDiscoveryCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
         pcl::PointCloud<pcl::PointXYZRGBA>::Ptr buf(new pcl::PointCloud<pcl::PointXYZRGBA>);
+        pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
 
         createCloud(depth, color, cloud);
 
@@ -340,6 +379,11 @@ private:
         //ロボットの座標の取得を検知
         if(serial.dataAvailable()){
           serial.getPos(robotPos);
+          start_flg = true;
+        }
+
+        //デバック用
+        if(rec_flg){
           start_flg = true;
         }
 
@@ -356,10 +400,14 @@ private:
         }
 
         orbit.filter(cloud,filterCloud);
+        *campus = *filterCloud;
         orbit.coordConversion(filterCloud);
+        orbit.ringCut(filterCloud,ringCutCloud);
+        //*ringCutCloud = *filterCloud;
+
 
         if(start_flg){
-          if((recTime.tv_sec - old_sec) + (recTime.tv_usec - old_usec)/1000.0/1000.0 >= 2.0 || debug_flg){
+          if(((recTime.tv_sec - old_sec) + (recTime.tv_usec - old_usec)/1000.0/1000.0 >= 2.0 && !rec_flg) || debug_flg){
             orbit.coeCreate();
             orbit.addPointView(buf);
             float shuttlePoint[2] = {0.0};
@@ -376,7 +424,14 @@ private:
               serial.write(shuttlePoint[0],shuttlePoint[1]);
             }else if(passCheckMode == 1){
               #ifdef DATA_VIEW_ON
-                printf("GOAL\n\n");
+              int cupCheckMode = orbit.cupCheck(buf);
+              if(cupCheckMode == 1){
+                printf("RONBAI\n\n");
+              }else if(cupCheckMode == 0){
+                printf("NO_CUP\n\n");
+              }else{
+                  printf("GOAL\n\n");
+              }
               #endif
               serial.write(0.0,0.0);
             }
@@ -388,64 +443,34 @@ private:
             orbit.setRobotXYZ(robotPos);
 
           #ifdef DEBUG_DATA_ON
-            for(int i = 0; i< 8;i++){
-              /*
-              printf("robotPosCartesian:%3.5f %3.5f %3.5f\n",robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
-              printf("robotPosAngle    :%3.5f %3.5f %3.5f\n",robotPos.angleX(),robotPos.angleY(),robotPos.angleZ());
-              robotPos.cartesianY(robotPos.cartesianY() - 0.1);
-              robotPos.angleZ(robotPos.angleZ() + 0.1);
-              printf("robotPosCartesian:%3.5f %3.5f %3.5f\n",robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
-              printf("robotPosAngle    :%3.5f %3.5f %3.5f\n",robotPos.angleX(),robotPos.angleY(),robotPos.angleZ());
-              float value[3];
-              for(int j = 0;j<3;j++){value[j] = xyz_centroid_buf[i][j];}
-              value[1] += 0.1 * (i+1);
-              rotationZ(value,0.1 * (i+1));
-              printf("xyz_centroid_buf :%3.5f %3.5f %3.5f\n",xyz_centroid_buf[i][0],xyz_centroid_buf[i][1],xyz_centroid_buf[i][2]);
-              printf("value            :%3.5f %3.5f %3.5f\n",value[0],value[1],value[2]);
-              orbit.setRobotXYZ(robotPos);
-              orbit.shiftCorrection(value);
-
-              printf("value            :%3.5f %3.5f %3.5f\n\n",value[0],value[1],value[2]);
-              orbit.addShuttlePoint(value[0],value[1],value[2]);
-              //*/
-              orbit.addShuttlePoint(xyz_centroid_buf[i][0],xyz_centroid_buf[i][1],xyz_centroid_buf[i][2]);
-            }
+            for(int i = 0; i< 8;i++){orbit.addShuttlePoint(xyz_centroid_buf[i][0],xyz_centroid_buf[i][1],xyz_centroid_buf[i][2]);}
             debug_flg = true;
           #else
             #ifdef DATA_VIEW_ON
-              orbit.shuttleDiscovery(filterCloud,shuttleDiscoveryCloud);
+              orbit.shuttleDiscovery(ringCutCloud,shuttleDiscoveryCloud);
             #else
-              orbit.shuttleDiscovery(filterCloud);
+              orbit.shuttleDiscovery(ringCutCloud);
             #endif
           #endif
           }
         }
         //--------------------------------------------------
         #ifdef DATA_VIEW_ON
-          pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
-          mergeCloud(campus,cloud,campus);
 
-          rotationX(campus,M_PI_2);
-          rotationZ(campus,-1.0 * M_PI_2);
-          rotationY(campus,CAMERA_ANGLE_Y * M_PI/180.0);
-          moveCloud(campus,CAMERA_SETUP_POS_X,CAMERA_SETUP_POS_Y,CAMERA_SETUP_POS_Z);
+          //*campus = *cloud;
+          orbit.coordConversion(campus);
           rotationZ(campus,-1.0 * robotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
           moveCloud(campus,robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
 
           mergeCloud(campus,shuttleDiscoveryCloud,campus);
           mergeCloud(campus,pointViewCloud,campus);
 
-          coatView(campus);
+          //orbit.ringCutNotMove(coat,coat);
+          mergeCloud(campus,coat,campus);
+          //coatView(campus);
+          //orbit.coatView(campus);
           visualizer->updatePointCloud(campus, cloudName);//*/
         #endif
-
-        /*//orbit.filter(cloud,filterCloud);
-        passThroughContainer(cloud,filterCloud);
-        //orbit.shuttleDiscovery(filterCloud,shuttleDiscoveryCloud);
-        //pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
-        //mergeCloud(filterCloud,shuttleDiscoveryCloud,campus);
-        visualizer->updatePointCloud(filterCloud, cloudName);*/
-
       }
       if(save)
       {
@@ -464,6 +489,166 @@ private:
     #endif
   }
 
+  bool filter_flg = false;
+
+
+  void debugViewer(){
+    cv::Mat color, depth;
+    pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Cloud Viewer"));
+    const string cloudName = "rendered";
+
+    lock.lock();
+    color = this->color;
+    depth = this->depth;
+    updateCloud = false;
+    lock.unlock();
+
+    createCloud(depth, color, cloud);
+
+    visualizer->addPointCloud(cloud, cloudName);
+    visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
+    visualizer->initCameraParameters();
+    visualizer->setBackgroundColor(0,0,0);
+    visualizer->setPosition(mode == BOTH ? color.cols : 0, 0);
+    visualizer->setSize(color.cols, color.rows);
+    visualizer->setShowFPS(true);
+    visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
+    visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
+
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr coat(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::io::loadPCDFile ("/home/ubuntu/catkin_ws/src/iai_kinect2/kinect2_viewer/pcd/coat01.pcd", *coat);
+
+    RosSerial serial;
+    Coord<float,float> robotPos;
+
+    for(; running && ros::ok();)
+    {
+      if(updateCloud)
+      {
+        lock.lock();
+        color = this->color;
+        depth = this->depth;
+        updateCloud = false;
+        lock.unlock();
+
+        createCloud(depth, color, cloud);
+
+        if(serial.dataAvailable()){
+          serial.getPos(robotPos);
+          printf("posX:%3.5f posY:%3.5f posZ:%3.5f\n",robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
+          printf("angleX:%3.5f angleY:%3.5f angleZ:%3.5f\n",robotPos.angleX(),robotPos.angleY(),robotPos.angleZ());
+          serial.write(robotPos.cartesianX(),robotPos.cartesianY());
+        }
+
+        visualizer->updatePointCloud(coat, cloudName);
+      }
+      if(save)
+      {
+        save = false;
+        cv::Mat depthDisp;
+        dispDepth(depth, depthDisp, 12000.0f);
+        saveCloudAndImages(cloud, color, depth, depthDisp);
+      }
+      visualizer->spinOnce(10);
+    }
+    visualizer->close();
+  }
+
+  int keyMode = 0;
+  void checkViewer(){
+    cv::Mat color, depth;
+    pcl::visualization::PCLVisualizer::Ptr visualizer(new pcl::visualization::PCLVisualizer("Cloud Viewer"));
+    const string cloudName = "rendered";
+
+    lock.lock();
+    color = this->color;
+    depth = this->depth;
+    updateCloud = false;
+    lock.unlock();
+
+    createCloud(depth, color, cloud);
+
+    visualizer->addPointCloud(cloud, cloudName);
+    visualizer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
+    visualizer->initCameraParameters();
+    visualizer->setBackgroundColor(0, 0, 0);
+    visualizer->setPosition(mode == BOTH ? color.cols : 0, 0);
+    visualizer->setSize(color.cols, color.rows);
+    visualizer->setShowFPS(true);
+    visualizer->setCameraPosition(0, 0, 0, 0, -1, 0);
+    visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
+
+    Orbit orbit;
+
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr filterCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    //pcl::PointCloud<pcl::PointXYZRGBA>::Ptr removalCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr ringCutCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr coat(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::io::loadPCDFile ("/home/ubuntu/catkin_ws/src/iai_kinect2/kinect2_viewer/pcd/coat01.pcd", *coat);
+
+    struct timeval recTime;
+    time_t old_sec = 0;
+    suseconds_t old_usec = 0;
+
+    Coord<float,float> robotPos;
+    robotPos.cartesianX(TZ3_X);
+    robotPos.cartesianY(TZ3_Y+0.108);
+    robotPos.angleZ(0.0);
+    orbit.setInitRobotXYZ(robotPos);
+    orbit.setRobotXYZ(robotPos);
+
+    cameraSetupPos.cartesianX(0.0);
+  	cameraSetupPos.cartesianY(0.0);
+  	cameraSetupPos.cartesianZ(0.033);
+  	cameraSetupPos.angleY(-23.75 * M_PI/180.0);
+    cameraSetupPos.angleZ(0.0 * M_PI/180.0);
+
+    for(; running && ros::ok();)
+    {
+      if(updateCloud)
+      {
+        lock.lock();
+        color = this->color;
+        depth = this->depth;
+        updateCloud = false;
+        lock.unlock();
+
+        createCloud(depth, color, cloud);
+
+        orbit.setCameraSetupPos(cameraSetupPos);
+        printf("posX:%3.5f posY:%3.5f posZ:%3.5f\n",cameraSetupPos.cartesianX(),cameraSetupPos.cartesianY(),cameraSetupPos.cartesianZ());
+        printf("angX:%3.5f angY:%3.5f angZ:%3.5f\n",cameraSetupPos.angleX()*180.0/M_PI,cameraSetupPos.angleY()*180.0/M_PI,cameraSetupPos.angleZ()*180.0/M_PI);
+        printf("keyMode:%d\n\n",keyMode);
+
+        pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
+        mergeCloud(campus,cloud,campus);
+
+        rotationX(campus,M_PI_2);
+        rotationZ(campus,-1.0 * M_PI_2);
+        rotationY(campus,cameraSetupPos.angleY());
+        rotationZ(campus,-1.0 * cameraSetupPos.angleZ());
+        moveCloud(campus,cameraSetupPos.cartesianX(),cameraSetupPos.cartesianY(),cameraSetupPos.cartesianZ());
+        rotationZ(campus,-1.0 * robotPos.angleZ());//ロボットの回転の+と関数の回転の+の方向が逆のため、-1,0をかける
+        moveCloud(campus,robotPos.cartesianX(),robotPos.cartesianY(),robotPos.cartesianZ());
+
+        //coatView(campus);
+        *campus += *coat;
+
+        visualizer->updatePointCloud(campus, cloudName);
+      }
+      if(save)
+      {
+        save = false;
+        cv::Mat depthDisp;
+        dispDepth(depth, depthDisp, 12000.0f);
+        saveCloudAndImages(cloud, color, depth, depthDisp);
+      }
+      visualizer->spinOnce(10);
+    }
+    visualizer->close();
+  }
+
   void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *)
   {
     if(event.keyUp())
@@ -474,28 +659,60 @@ private:
       case 'q':
         running = false;
         break;
-      /*case ' ':
-      case 's':
-        save = true;
-        break;*/
-      /*case 'a':
-        angle[0] += M_PI_4;
+      case 'i':
+        filter_flg = !filter_flg;
+        rec_flg = !rec_flg;
         break;
-      case 'z':
-        angle[0] -= M_PI_4;
+      case 'w':
+        cameraSetupPos.cartesianX(cameraSetupPos.cartesianX()+0.001);
+        geinAir += 0.001;
         break;
       case 's':
-        angle[1] += M_PI_4;
+        cameraSetupPos.cartesianX(cameraSetupPos.cartesianX()-0.001);
+        geinAir -= 0.001;
         break;
-      case 'x':
-        angle[1] -= M_PI_4;
+      case 'a':
+        cameraSetupPos.cartesianY(cameraSetupPos.cartesianY()+0.001);
         break;
       case 'd':
-        angle[2] += M_PI_4;
+          cameraSetupPos.cartesianY(cameraSetupPos.cartesianY()-0.001);
+        break;
+      case 'z':
+        cameraSetupPos.cartesianZ(cameraSetupPos.cartesianZ()+0.001);
+        break;
+      case 'x':
+        cameraSetupPos.cartesianZ(cameraSetupPos.cartesianZ()-0.001);
+        break;
+      case 'e':
+        keyMode++;
+        if(keyMode == 3)keyMode = 0;
+        break;
+      case 'c':
+        switch (keyMode) {
+        case 0:
+          cameraSetupPos.angleX(cameraSetupPos.angleX()+0.25 * M_PI/180.0);
+          break;
+        case 1:
+          cameraSetupPos.angleY(cameraSetupPos.angleY()+0.25 * M_PI/180.0);
+          break;
+        case 2:
+          cameraSetupPos.angleZ(cameraSetupPos.angleZ()+0.25 * M_PI/180.0);
+          break;
+        }
         break;
       case 'v':
-        angle[2] -= M_PI_4;
-        break;*/
+        switch (keyMode) {
+        case 0:
+          cameraSetupPos.angleX(cameraSetupPos.angleX()-0.25 * M_PI/180.0);
+          break;
+        case 1:
+          cameraSetupPos.angleY(cameraSetupPos.angleY()-0.25 * M_PI/180.0);
+          break;
+        case 2:
+          cameraSetupPos.angleZ(cameraSetupPos.angleZ()-0.25 * M_PI/180.0);
+          break;
+        }
+        break;
       }
     }
   }
@@ -718,6 +935,14 @@ int main(int argc, char **argv)
     else if(param == "pcl")
     {
       mode = Receiver::PCL;
+    }
+    else if(param == "debug")
+    {
+      mode = Receiver::DEBUG;
+    }
+    else if(param == "check")
+    {
+      mode = Receiver::CHECK;
     }
     else
     {
