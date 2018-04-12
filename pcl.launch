@@ -1,8 +1,4 @@
 <launch>
-    <node pkg="kinect2_viewer" type="kinect2_viewer" name="kinect2_viewer" output="screen" args="kinect2 sd debug"/>
+    <node pkg="kinect2_viewer" type="kinect2_viewer" name="kinect2_viewer" output="screen" args="kinect2 sd pcl"/>
     <node pkg="rosbag" type="play" name="player" args="--clock /home/ubuntu/bagfiles/free.bag"/>
-    <node pkg="rosserial_python" type="serial_node.py" name="serial_node">
-      <param name="port" value="/dev/ttyUSB0"/>
-      <param name="baud" value="115200"/>
-    </node>
 </launch>

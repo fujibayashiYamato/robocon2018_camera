@@ -69,6 +69,8 @@ roslaunchデバック用
     <node pkg="rosserial_test" type="rosserial_test" name="rosserial_test"/>
 </launch>
 
+roslaunch kinect2_bridge kinect2_bridge.launch depth_method:=opengl reg_method:=cpu
+
 y=ax^2+bx+c
 
 ax^2+bx+(c-y)=0
