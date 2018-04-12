@@ -315,7 +315,7 @@ private:
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr coordConversionCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr pointsCutCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr coat(new pcl::PointCloud<pcl::PointXYZRGBA>);
-    pcl::io::loadPCDFile ("../src/iai_kinect2/kinect2_viewer/pcd/coat01.pcd", *coat);
+    pcl::io::loadPCDFile ("../catkin_ws/src/iai_kinect2/kinect2_viewer/pcd/coat01.pcd", *coat);
 
     Orbit orbit;
     RosSerial serial;
@@ -516,7 +516,7 @@ private:
     visualizer->registerKeyboardCallback(&Receiver::keyboardEvent, *this);
 
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr coat(new pcl::PointCloud<pcl::PointXYZRGBA>);
-    pcl::io::loadPCDFile ("../src/iai_kinect2/kinect2_viewer/pcd/coat01.pcd", *coat);
+    pcl::io::loadPCDFile ("../catkin_ws/src/iai_kinect2/kinect2_viewer/pcd/coat01.pcd", *coat);
 
     RosSerial serial;
     Coord<float,float> robotPos;
@@ -585,7 +585,7 @@ private:
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr campus(new pcl::PointCloud<pcl::PointXYZRGBA>);
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr ringCutCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr coat(new pcl::PointCloud<pcl::PointXYZRGBA>);
-    pcl::io::loadPCDFile ("../src/iai_kinect2/kinect2_viewer/pcd/coat01.pcd", *coat);
+    pcl::io::loadPCDFile ("../catkin_ws/src/iai_kinect2/kinect2_viewer/pcd/coat01.pcd", *coat);
 
     struct timeval recTime;
     time_t old_sec = 0;

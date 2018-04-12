@@ -1,4 +1,4 @@
 <launch>
     <node pkg="kinect2_viewer" type="kinect2_viewer" name="kinect2_viewer" output="screen" args="kinect2 sd pcl"/>
-    <node pkg="rosbag" type="play" name="player" args="--clock /home/ubuntu/bagfiles/free.bag"/>
+    <node pkg="rosbag" type="play" name="player" args="--clock ../bagfiles/free.bag"/>
 </launch>
