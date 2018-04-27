@@ -10,6 +10,7 @@ public:
   RosSerial();
   void messgeCallback(const std_msgs::Float32MultiArray::ConstPtr& rx_msg);
   void write(float y,float z);
+  void write(float z);
   void cycle();
   void getPos(Coord<float,float> &coord);
   bool dataAvailable();
@@ -42,6 +43,13 @@ void RosSerial::write(float y,float z)
 {
   tx_msg.data.clear();
   tx_msg.data.push_back(y);
+  tx_msg.data.push_back(z);
+  pub.publish(tx_msg);
+}
+
+void RosSerial::write(float z)
+{
+  tx_msg.data.clear();
   tx_msg.data.push_back(z);
   pub.publish(tx_msg);
 }
